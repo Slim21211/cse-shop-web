@@ -1,66 +1,95 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import Link from 'next/link';
+import { ArrowRight, Gift, ShoppingBag } from 'lucide-react';
+import styles from './page.module.scss';
 
-export default function Home() {
+export default function HomePage() {
   return (
     <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
+      {/* Hero Section */}
+      <section className={styles.hero}>
+        <div className={`container ${styles.heroContainer}`}>
+          <h1 className={styles.heroTitle}>
+            Магазин подарков <span className={styles.accent}>КСЭ</span>
+          </h1>
+          <p className={styles.heroSubtitle}>
+            Обменивайте заработанные баллы на фирменный мерч и подарки
           </p>
+          <div className={styles.heroActions}>
+            <Link href="/catalog/merch" className={styles.primaryButton}>
+              Посмотреть каталог
+              <ArrowRight size={20} />
+            </Link>
+            <Link href="/login" className={styles.secondaryButton}>
+              Войти в аккаунт
+            </Link>
+          </div>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Categories */}
+      <section className={styles.categories}>
+        <div className="container">
+          <h2 className={styles.sectionTitle}>Категории товаров</h2>
+          <div className={styles.categoriesGrid}>
+            <Link href="/catalog/merch" className={styles.categoryCard}>
+              <div className={styles.categoryIcon}>
+                <ShoppingBag size={48} />
+              </div>
+              <h3 className={styles.categoryTitle}>Мерч компании</h3>
+              <p className={styles.categoryDescription}>
+                Фирменная одежда, аксессуары и сувениры с логотипом КСЭ
+              </p>
+              <span className={styles.categoryLink}>
+                Смотреть каталог
+                <ArrowRight size={18} />
+              </span>
+            </Link>
+
+            <Link href="/catalog/gifts" className={styles.categoryCard}>
+              <div className={styles.categoryIcon}>
+                <Gift size={48} />
+              </div>
+              <h3 className={styles.categoryTitle}>Подарки отдела</h3>
+              <p className={styles.categoryDescription}>
+                Эксклюзивные подарки для сотрудников и партнеров
+              </p>
+              <span className={styles.categoryLink}>
+                Смотреть каталог
+                <ArrowRight size={18} />
+              </span>
+            </Link>
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* Features */}
+      <section className={styles.features}>
+        <div className="container">
+          <div className={styles.featuresGrid}>
+            <div className={styles.feature}>
+              <div className={styles.featureNumber}>01</div>
+              <h3 className={styles.featureTitle}>Накапливайте баллы</h3>
+              <p className={styles.featureText}>
+                Выполняйте задачи и получайте баллы за достижения
+              </p>
+            </div>
+            <div className={styles.feature}>
+              <div className={styles.featureNumber}>02</div>
+              <h3 className={styles.featureTitle}>Выбирайте подарки</h3>
+              <p className={styles.featureText}>
+                Обменивайте баллы на товары из каталога
+              </p>
+            </div>
+            <div className={styles.feature}>
+              <div className={styles.featureNumber}>03</div>
+              <h3 className={styles.featureTitle}>Получайте заказы</h3>
+              <p className={styles.featureText}>
+                Подтверждайте заказ и получайте подарки
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
