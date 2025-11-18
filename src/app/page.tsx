@@ -37,7 +37,7 @@ export default function HomePage() {
               </div>
               <h3 className={styles.categoryTitle}>Мерч компании</h3>
               <p className={styles.categoryDescription}>
-                Фирменная одежда, аксессуары и сувениры с логотипом КСЭ
+                Аксессуары и сувениры с логотипом КСЭ
               </p>
               <span className={styles.categoryLink}>
                 Смотреть каталог
@@ -51,7 +51,7 @@ export default function HomePage() {
               </div>
               <h3 className={styles.categoryTitle}>Подарки отдела</h3>
               <p className={styles.categoryDescription}>
-                Эксклюзивные подарки для сотрудников и партнеров
+                Эксклюзивные подарки для сотрудников
               </p>
               <span className={styles.categoryLink}>
                 Смотреть каталог
