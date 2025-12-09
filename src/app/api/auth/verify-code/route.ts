@@ -13,24 +13,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем код (в production использовать Redis)
-    // Временно пропускаем проверку для разработки
-    // const storedData = codes.get(email.toLowerCase())
-    // if (!storedData || storedData.code !== code || storedData.expiresAt < Date.now()) {
-    //   return NextResponse.json({ error: 'Неверный или истекший код' }, { status: 400 })
-    // }
-
     const supabase = await createClient();
 
-    // Создаем или обновляем пользователя в Supabase Auth
-    const { data: authData, error: authError } =
+    // Сначала пытаемся войти
+    let userId: string | undefined;
+
+    const { data: signInData, error: signInError } =
       await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
-        password: code, // Временно используем код как пароль
+        password: code,
       });
 
-    // Если пользователя нет, создаем
-    if (authError) {
+    if (signInError) {
+      // Если пользователя нет - создаем
       const { data: signUpData, error: signUpError } =
         await supabase.auth.signUp({
           email: email.toLowerCase(),
@@ -38,11 +33,23 @@ export async function POST(request: NextRequest) {
         });
 
       if (signUpError) {
+        console.error('SignUp error:', signUpError);
         return NextResponse.json(
           { error: 'Ошибка авторизации' },
           { status: 500 }
         );
       }
+
+      userId = signUpData.user?.id;
+    } else {
+      userId = signInData.user?.id;
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Не удалось получить ID пользователя' },
+        { status: 500 }
+      );
     }
 
     // Получаем баллы пользователя
@@ -50,9 +57,10 @@ export async function POST(request: NextRequest) {
 
     // Сохраняем данные пользователя в таблицу users
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30); // 30 дней
+    expiresAt.setDate(expiresAt.getDate() + 30);
 
     const { error: dbError } = await supabase.from('users').upsert({
+      id: userId, // ИСПРАВЛЕНИЕ: добавлен id
       email: email.toLowerCase(),
       ispring_user_id: userData.userId,
       first_name: userData.firstName,
@@ -63,10 +71,11 @@ export async function POST(request: NextRequest) {
 
     if (dbError) {
       console.error('Database error:', dbError);
+      return NextResponse.json(
+        { error: 'Ошибка сохранения данных' },
+        { status: 500 }
+      );
     }
-
-    // Удаляем использованный код
-    // codes.delete(email.toLowerCase())
 
     return NextResponse.json({
       success: true,

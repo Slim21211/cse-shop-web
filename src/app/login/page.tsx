@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import styles from './page.module.scss';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get('redirect') || '/';
+
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -20,7 +23,6 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Проверяем email
       const checkRes = await fetch('/api/auth/check-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,7 +38,6 @@ export default function LoginPage() {
 
       setUserData(checkData.user);
 
-      // Отправляем код
       const sendRes = await fetch('/api/auth/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,8 +76,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Успешная авторизация
-      router.push('/');
+      // Успешная авторизация - редирект
+      router.push(redirect);
       router.refresh();
     } catch (err) {
       setError('Произошла ошибка');

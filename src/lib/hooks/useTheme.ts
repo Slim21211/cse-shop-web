@@ -1,51 +1,86 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useSyncExternalStore } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { setCookie } from 'cookies-next';
 
-type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark';
 
-function subscribe(callback: () => void) {
-  if (typeof window === 'undefined') return () => {};
+const STORAGE_KEY = 'cse-theme';
+const THEME_ATTRIBUTE = 'data-theme';
+const isBrowser = typeof window !== 'undefined';
 
-  const media = window.matchMedia('(prefers-color-scheme: dark)');
-  media.addEventListener('change', callback);
-  return () => media.removeEventListener('change', callback);
+/**
+ * Получает начальную тему: из localStorage, затем из предпочтений системы, по умолчанию 'light'.
+ */
+function getInitialTheme(): Theme {
+  if (!isBrowser) return 'light';
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+    if (stored === 'light' || stored === 'dark') return stored;
+
+    const prefersDark = window.matchMedia(
+      '(prefers-color-scheme: dark)'
+    ).matches;
+    return prefersDark ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
 }
 
-function getSnapshot(): Theme {
-  if (typeof window === 'undefined') return 'light';
+/**
+ * Применяет тему к элементу <html>, сохраняет в localStorage И в куки (для SSR).
+ */
+function applyTheme(theme: Theme) {
+  if (!isBrowser) return;
 
-  const stored = localStorage.getItem('theme') as Theme | null;
-  if (stored === 'light' || stored === 'dark') return stored;
+  try {
+    document.documentElement.setAttribute(THEME_ATTRIBUTE, theme);
+    localStorage.setItem(STORAGE_KEY, theme);
 
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-}
-
-function getServerSnapshot(): Theme {
-  return 'light';
+    // Сохраняем тему в куки для SSR
+    setCookie(STORAGE_KEY, theme, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365, // 1 год
+    });
+  } catch (error) {
+    console.error('Failed to apply theme:', error);
+  }
 }
 
 export function useTheme() {
-  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
+  // Инициализируем mounted на основе isBrowser для избежания ошибок гидратации/линтера
+  const [mounted, setMounted] = useState(isBrowser);
+
+  // Эффект для синхронизации темы с DOM и куками при ее изменении.
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    applyTheme(theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    localStorage.setItem('theme', newTheme);
-  };
+  // Отдельный эффект для установки mounted (если нужно):
+  useEffect(() => {
+    if (!mounted && isBrowser) {
+      setMounted(true);
+    }
+  }, [mounted]);
 
-  const mounted = typeof window !== 'undefined';
+  const toggleTheme = useCallback(() => {
+    setTheme((prevTheme) => {
+      return prevTheme === 'light' ? 'dark' : 'light';
+    });
+  }, []);
+
+  const setThemeValue = useCallback((newTheme: Theme) => {
+    setTheme(newTheme);
+  }, []);
 
   return {
     theme,
     toggleTheme,
+    setTheme: setThemeValue,
     mounted,
-  } as const;
+  };
 }

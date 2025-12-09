@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, User, Sun, Moon, Menu, X } from 'lucide-react';
+import { ShoppingCart, User, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/lib/hooks/useTheme';
 import { useIsMobile } from '@/lib/hooks/useMediaQuery';
-import styles from './Header.module.scss';
+import styles from './header.module.scss';
 
 interface HeaderProps {
   user?: {
@@ -18,7 +17,9 @@ interface HeaderProps {
 export function Header({ user, cartItemsCount = 0 }: HeaderProps) {
   const { theme, toggleTheme, mounted } = useTheme();
   const isMobile = useIsMobile();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Определяем иконку для темы
+  const ThemeIcon = theme === 'light' ? Moon : Sun;
 
   return (
     <header className={styles.header}>
@@ -26,7 +27,9 @@ export function Header({ user, cartItemsCount = 0 }: HeaderProps) {
         {/* Logo */}
         <Link href="/" className={styles.logo}>
           <span className={styles.logoText}>КСЭ</span>
-          <span className={styles.logoSubtext}>Магазин подарков</span>
+          {isMobile ? null : (
+            <span className={styles.logoSubtext}>Магазин подарков</span>
+          )}
         </Link>
 
         {/* Desktop Navigation */}
@@ -43,19 +46,31 @@ export function Header({ user, cartItemsCount = 0 }: HeaderProps) {
 
         {/* Actions */}
         <div className={styles.actions}>
-          {/* Theme Toggle */}
-          {mounted && (
-            <button
-              onClick={toggleTheme}
-              className={styles.iconButton}
-              aria-label="Переключить тему"
-            >
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-            </button>
-          )}
+          {/* ИСПРАВЛЕНИЕ ГИДРАТАЦИИ: Рендерим <button> всегда. */}
+          <button
+            // Если mounted === false (на SSR), onClick будет undefined (неактивно)
+            onClick={mounted ? toggleTheme : undefined}
+            className={styles.iconButton}
+            aria-label="Переключить тему"
+            title={theme === 'light' ? 'Темная тема' : 'Светлая тема'}
+            disabled={!mounted} // Отключаем на сервере
+          >
+            {/* ИСПРАВЛЕНИЕ: Используем mounted, чтобы рендерить одинаковое содержимое на SSR и клиенте.
+               На SSR мы рендерим заглушку, которая сохраняет место, 
+               чтобы избежать ошибки несовпадения иконки. 
+            */}
+            {mounted ? (
+              <ThemeIcon size={20} />
+            ) : (
+              // Рендерим пустой элемент, сохраняющий место, чтобы структура была одинаковой
+              <span
+                style={{ width: 20, height: 20, display: 'inline-block' }}
+              />
+            )}
+          </button>
 
           {/* Cart */}
-          <Link href="/cart" className={styles.iconButton}>
+          <Link href="/cart" className={styles.iconButton} title="Корзина">
             <ShoppingCart size={20} />
             {cartItemsCount > 0 && (
               <span className={styles.badge}>{cartItemsCount}</span>
@@ -80,39 +95,8 @@ export function Header({ user, cartItemsCount = 0 }: HeaderProps) {
               Войти
             </Link>
           )}
-
-          {/* Mobile Menu Toggle */}
-          {isMobile && (
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={styles.iconButton}
-              aria-label="Меню"
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          )}
         </div>
       </div>
-
-      {/* Mobile Menu */}
-      {isMobile && mobileMenuOpen && (
-        <nav className={styles.mobileNav}>
-          <Link
-            href="/catalog/merch"
-            className={styles.mobileNavLink}
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            Мерч компании
-          </Link>
-          <Link
-            href="/catalog/gifts"
-            className={styles.mobileNavLink}
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            Подарки отдела
-          </Link>
-        </nav>
-      )}
     </header>
   );
 }

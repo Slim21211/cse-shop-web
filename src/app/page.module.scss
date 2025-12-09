@@ -81,6 +81,7 @@
 
 .categories {
   padding: var(--spacing-2xl) 0;
+  background-color: var(--background-color); // ИСПРАВЛЕНИЕ: явный фон
 }
 
 .sectionTitle {
@@ -150,9 +151,14 @@
   font-weight: var(--font-weight-medium);
 }
 
+// ИСПРАВЛЕНИЕ: Другой цвет фона для Features
 .features {
   padding: var(--spacing-2xl) 0;
-  background-color: var(--background-secondary);
+  background: linear-gradient(
+    135deg,
+    rgba(254, 80, 0, 0.05) 0%,
+    rgba(79, 44, 29, 0.05) 100%
+  );
 }
 
 .featuresGrid {
@@ -163,6 +169,15 @@
 
 .feature {
   text-align: center;
+  padding: var(--spacing-lg);
+  background-color: var(--background-color);
+  border-radius: var(--border-radius-lg);
+  transition: all 0.3s;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+  }
 }
 
 .featureNumber {

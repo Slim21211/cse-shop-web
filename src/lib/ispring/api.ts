@@ -3,15 +3,19 @@ interface ISpringTokenResponse {
   expires_in: number;
 }
 
+interface ISpringField {
+  name: string;
+  value: string;
+}
+
 interface ISpringUser {
   userId: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  fields: Array<{
-    name: string;
-    value: string;
-  }>;
+  fields: ISpringField | ISpringField[]; // Может быть объектом или массивом!
+}
+
+interface ISpringUsersResponse {
+  userProfiles: ISpringUser | ISpringUser[]; // Может быть объектом или массивом!
+  totalUsersNumber: number;
 }
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
@@ -40,6 +44,8 @@ export async function getISpringToken(): Promise<string> {
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('iSpring token error:', errorText);
     throw new Error('Failed to get iSpring token');
   }
 
@@ -60,6 +66,8 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
   const pageSize = 1000;
 
   while (true) {
+    console.log(`Fetching iSpring users page ${pageNumber}...`);
+
     const response = await fetch(
       `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
       {
@@ -74,13 +82,25 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('iSpring users error:', errorText);
       throw new Error('Failed to fetch iSpring users');
     }
 
-    const data = await response.json();
-    const users = data.userProfiles || [];
+    const data: ISpringUsersResponse = await response.json();
+
+    // ИСПРАВЛЕНИЕ: правильная обработка ответа
+    let users: ISpringUser[];
+    if (Array.isArray(data.userProfiles)) {
+      users = data.userProfiles;
+    } else if (data.userProfiles) {
+      users = [data.userProfiles];
+    } else {
+      users = [];
+    }
 
     allUsers.push(...users);
+    console.log(`Fetched ${users.length} users, total: ${allUsers.length}`);
 
     if (users.length < pageSize) break;
     pageNumber++;
@@ -102,7 +122,8 @@ export async function getUserPoints(userId: string): Promise<number> {
   );
 
   if (!response.ok) {
-    throw new Error('Failed to get user points');
+    console.error('Failed to get user points');
+    return 0;
   }
 
   const xml = await response.text();
@@ -118,14 +139,12 @@ export async function withdrawPoints(
 ): Promise<boolean> {
   const token = await getISpringToken();
 
-  const xml = `
-    <?xml version="1.0" encoding="UTF-8"?>
-        <withdrawGamificationPoints>
-        <userId>${userId}</userId>
-        <amount>${amount}</amount>
-        <reason>${reason}</reason>
-        </withdrawGamificationPoints>
-    `;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<withdrawGamificationPoints>
+  <userId>${userId}</userId>
+  <amount>${amount}</amount>
+  <reason>${reason}</reason>
+</withdrawGamificationPoints>`;
 
   const response = await fetch(
     `https://${process.env.ISPRING_API_DOMAIN}/gamification/points/withdraw`,

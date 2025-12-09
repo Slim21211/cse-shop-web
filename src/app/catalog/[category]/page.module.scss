@@ -3,6 +3,28 @@
   padding: var(--spacing-2xl) 0;
 }
 
+.navigation {
+  margin-bottom: var(--spacing-xl);
+}
+
+.homeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  color: var(--text-color);
+  background-color: var(--background-secondary);
+  border-radius: var(--border-radius-lg);
+  font-weight: var(--font-weight-medium);
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: var(--border-color);
+    transform: translateX(-2px);
+    opacity: 1;
+  }
+}
+
 .header {
   display: flex;
   justify-content: space-between;

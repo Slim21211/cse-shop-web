@@ -1,5 +1,8 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Home } from 'lucide-react';
 import { useGetProductsQuery } from '@/lib/store/api/productsApi';
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
 import { addToCart, selectCartItems } from '@/lib/store/slices/cartSlice';
@@ -14,6 +17,7 @@ interface CatalogPageClientProps {
 export default function CatalogPageClient({
   category,
 }: CatalogPageClientProps) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
 
@@ -22,8 +26,28 @@ export default function CatalogPageClient({
   const categoryTitle =
     category === 'merch' ? 'Мерч компании' : 'Подарки отдела';
 
-  const handleAddToCart = (product: Product) => {
-    dispatch(addToCart(product));
+  const handleAddToCart = async (product: Product) => {
+    try {
+      const response = await fetch('/api/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: product.id,
+          quantity: 1,
+        }),
+      });
+
+      if (response.status === 401) {
+        router.push('/login?redirect=/catalog/' + category);
+        return;
+      }
+
+      if (response.ok) {
+        dispatch(addToCart(product));
+      }
+    } catch (error) {
+      console.error('Add to cart error:', error);
+    }
   };
 
   const isInCart = (productId: number) => {
@@ -59,6 +83,14 @@ export default function CatalogPageClient({
   return (
     <div className={styles.page}>
       <div className="container">
+        {/* ИСПРАВЛЕНИЕ: Кнопка на главную */}
+        <div className={styles.navigation}>
+          <Link href="/" className={styles.homeButton}>
+            <Home size={20} />
+            На главную
+          </Link>
+        </div>
+
         <div className={styles.header}>
           <h1 className={styles.title}>{categoryTitle}</h1>
           <p className={styles.count}>

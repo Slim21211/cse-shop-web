@@ -6,24 +6,53 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category');
 
+    console.log('Products API called with category:', category);
+
     const supabase = await createClient();
 
-    let query = supabase.from('products').select('*').order('id');
+    // ИСПРАВЛЕНИЕ: Строгая фильтрация БЕЗ переменной query
+    let data, error;
 
-    // Фильтр по категории
     if (category === 'merch') {
-      query = query.eq('is_gift', false);
+      console.log('Fetching ONLY merch (is_gift = false)');
+      const result = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_gift', false)
+        .order('id');
+      data = result.data;
+      error = result.error;
     } else if (category === 'gifts') {
-      query = query.eq('is_gift', true);
+      console.log('Fetching ONLY gifts (is_gift = true)');
+      const result = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_gift', true)
+        .order('id');
+      data = result.data;
+      error = result.error;
+    } else {
+      console.log('Fetching ALL products');
+      const result = await supabase.from('products').select('*').order('id');
+      data = result.data;
+      error = result.error;
     }
 
-    const { data, error } = await query;
-
     if (error) {
+      console.error('Supabase error:', error);
       return NextResponse.json(
         { error: 'Ошибка получения товаров' },
         { status: 500 }
       );
+    }
+
+    // Проверяем результат
+    console.log(
+      `✅ Returned ${data?.length || 0} products for category: ${category}`
+    );
+    if (data && data.length > 0) {
+      console.log('First product is_gift:', data[0].is_gift);
+      console.log('Last product is_gift:', data[data.length - 1].is_gift);
     }
 
     return NextResponse.json({ products: data });
