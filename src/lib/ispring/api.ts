@@ -10,11 +10,11 @@ interface ISpringField {
 
 interface ISpringUser {
   userId: string;
-  fields: ISpringField | ISpringField[]; // Может быть объектом или массивом!
+  fields: ISpringField | ISpringField[];
 }
 
 interface ISpringUsersResponse {
-  userProfiles: ISpringUser | ISpringUser[]; // Может быть объектом или массивом!
+  userProfiles: ISpringUser | ISpringUser[];
   totalUsersNumber: number;
 }
 
@@ -24,39 +24,82 @@ export async function getISpringToken(): Promise<string> {
   const now = Date.now();
 
   if (tokenCache && tokenCache.expiresAt > now) {
+    console.log('✅ Using cached iSpring token');
     return tokenCache.token;
   }
 
-  const response = await fetch(
-    `https://${process.env.ISPRING_DOMAIN}/api/v3/token`,
-    {
+  // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ
+  console.log('🔑 Requesting new iSpring token...');
+  console.log('ISPRING_DOMAIN:', process.env.ISPRING_DOMAIN);
+  console.log(
+    'ISPRING_CLIENT_ID:',
+    process.env.ISPRING_CLIENT_ID ? '✅ Set' : '❌ NOT SET'
+  );
+  console.log(
+    'ISPRING_CLIENT_SECRET:',
+    process.env.ISPRING_CLIENT_SECRET ? '✅ Set' : '❌ NOT SET'
+  );
+
+  if (
+    !process.env.ISPRING_DOMAIN ||
+    !process.env.ISPRING_CLIENT_ID ||
+    !process.env.ISPRING_CLIENT_SECRET
+  ) {
+    throw new Error('Missing iSpring credentials in environment variables');
+  }
+
+  const url = `https://${process.env.ISPRING_DOMAIN}/api/v3/token`;
+  console.log('Request URL:', url);
+
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: process.env.ISPRING_CLIENT_ID,
+    client_secret: process.env.ISPRING_CLIENT_SECRET,
+  });
+
+  console.log('Request body:', {
+    grant_type: 'client_credentials',
+    client_id: process.env.ISPRING_CLIENT_ID.substring(0, 8) + '...',
+    client_secret: '***',
+  });
+
+  try {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
       },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: process.env.ISPRING_CLIENT_ID!,
-        client_secret: process.env.ISPRING_CLIENT_SECRET!,
-      }),
+      body: body.toString(),
+    });
+
+    console.log('Response status:', response.status);
+    console.log(
+      'Response headers:',
+      Object.fromEntries(response.headers.entries())
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ iSpring token error response:', errorText);
+      throw new Error(
+        `Failed to get iSpring token (${response.status}): ${errorText}`
+      );
     }
-  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('iSpring token error:', errorText);
-    throw new Error('Failed to get iSpring token');
+    const data: ISpringTokenResponse = await response.json();
+    console.log('✅ Successfully got iSpring token');
+
+    tokenCache = {
+      token: data.access_token,
+      expiresAt: now + (data.expires_in - 60) * 1000,
+    };
+
+    return data.access_token;
+  } catch (error) {
+    console.error('❌ Exception while getting iSpring token:', error);
+    throw error;
   }
-
-  const data: ISpringTokenResponse = await response.json();
-
-  tokenCache = {
-    token: data.access_token,
-    expiresAt: now + (data.expires_in - 60) * 1000,
-  };
-
-  return data.access_token;
 }
 
 export async function getISpringUsers(): Promise<ISpringUser[]> {
@@ -65,8 +108,10 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
   let pageNumber = 1;
   const pageSize = 1000;
 
+  console.log('📥 Fetching iSpring users...');
+
   while (true) {
-    console.log(`Fetching iSpring users page ${pageNumber}...`);
+    console.log(`Fetching page ${pageNumber}...`);
 
     const response = await fetch(
       `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
@@ -83,13 +128,14 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('iSpring users error:', errorText);
-      throw new Error('Failed to fetch iSpring users');
+      console.error('❌ iSpring users error:', errorText);
+      throw new Error(
+        `Failed to fetch iSpring users (${response.status}): ${errorText}`
+      );
     }
 
     const data: ISpringUsersResponse = await response.json();
 
-    // ИСПРАВЛЕНИЕ: правильная обработка ответа
     let users: ISpringUser[];
     if (Array.isArray(data.userProfiles)) {
       users = data.userProfiles;
@@ -100,7 +146,7 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
     }
 
     allUsers.push(...users);
-    console.log(`Fetched ${users.length} users, total: ${allUsers.length}`);
+    console.log(`✅ Fetched ${users.length} users, total: ${allUsers.length}`);
 
     if (users.length < pageSize) break;
     pageNumber++;
@@ -110,26 +156,42 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
 }
 
 export async function getUserPoints(userId: string): Promise<number> {
-  const token = await getISpringToken();
+  try {
+    const token = await getISpringToken();
 
-  const response = await fetch(
-    `https://${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
-    {
-      headers: {
-        Authorization: token,
-      },
+    console.log('💰 Getting points for user:', userId);
+
+    // ИСПРАВЛЕНИЕ: Правильный URL и заголовки
+    const response = await fetch(
+      `https://${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
+      {
+        headers: {
+          Authorization: token, // Без "Bearer"
+          Accept: 'application/xml',
+        },
+      }
+    );
+
+    console.log('Points response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to get user points:', errorText);
+      return 0; // Возвращаем 0 вместо ошибки
     }
-  );
 
-  if (!response.ok) {
-    console.error('Failed to get user points');
-    return 0;
+    const xml = await response.text();
+    console.log('Points XML response:', xml.substring(0, 200));
+
+    const pointsMatch = xml.match(/<points>(\d+)<\/points>/);
+    const points = pointsMatch ? parseInt(pointsMatch[1], 10) : 0;
+
+    console.log('✅ User points:', points);
+    return points;
+  } catch (error) {
+    console.error('❌ Error getting user points:', error);
+    return 0; // Возвращаем 0 при любой ошибке
   }
-
-  const xml = await response.text();
-  const pointsMatch = xml.match(/<points>(\d+)<\/points>/);
-
-  return pointsMatch ? parseInt(pointsMatch[1], 10) : 0;
 }
 
 export async function withdrawPoints(
