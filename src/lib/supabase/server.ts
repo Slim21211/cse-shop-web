@@ -1,27 +1,18 @@
+// lib/supabase/server.ts
+
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
 export async function createClient() {
-  const cookieStore = await cookies();
-
+  // Мы используем заглушки для cookies, так как наша сессия хранится в lib/session.ts
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set({ name, value, ...options })
-            );
-          } catch (error) {
-            // Обработка ошибок, если необходимо
-            console.error('Error setting cookies:', error);
-          }
-        },
+        // Заглушка: не делает ничего, но удовлетворяет требованиям типа
+        get: () => undefined,
+        set: () => {},
+        remove: () => {},
       },
     }
   );

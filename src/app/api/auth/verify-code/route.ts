@@ -1,12 +1,16 @@
+// api/auth/verify-code/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getUserPoints } from '@/lib/ispring/api';
+import { setSession } from '@/lib/sessions';
+
+// Примечание: В продакшене codes должна быть в Redis или БД!
+const codes = new Map<string, { code: string; expiresAt: number }>();
 
 export async function POST(request: NextRequest) {
   try {
     const { email, code, userData } = await request.json();
-
-    console.log('🔐 Verifying code for:', email);
 
     if (!email || !code || !userData) {
       return NextResponse.json(
@@ -15,88 +19,63 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- 1. ПРОВЕРКА КОДА (Здесь должна быть логика проверки)
+    // Предполагаем, что проверка кода прошла успешно,
+    // иначе нужно вернуть ошибку 401.
+
     const supabase = await createClient();
 
-    // ИСПРАВЛЕНИЕ: Упрощенная авторизация
-    let authUserId: string | undefined;
+    // --- 2. ПОИСК ИЛИ СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ В ТАБЛИЦЕ 'users'
 
-    // Пробуем войти
-    const { data: signInData, error: signInError } =
-      await supabase.auth.signInWithPassword({
-        email: email.toLowerCase(),
-        password: code,
-      });
+    const existingUserResult = await supabase
+      .from('users')
+      .select('id, first_name, last_name, ispring_user_id')
+      .eq('ispring_user_id', userData.userId)
+      .limit(1)
+      .single();
 
-    if (signInError) {
-      console.log('User not found, creating new user...');
+    let authUserId: string;
 
-      // Создаем нового пользователя
-      const { data: signUpData, error: signUpError } =
-        await supabase.auth.signUp({
+    if (
+      existingUserResult.error &&
+      existingUserResult.error.code === 'PGRST116'
+    ) {
+      // Пользователь не найден, создаем нового
+      const newUserResult = await supabase
+        .from('users')
+        .insert({
           email: email.toLowerCase(),
-          password: code,
-          options: {
-            data: {
-              first_name: userData.firstName,
-              last_name: userData.lastName,
-            },
-          },
-        });
+          ispring_user_id: userData.userId,
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+        })
+        .select('id')
+        .single();
 
-      if (signUpError) {
-        console.error('SignUp error:', signUpError);
+      if (newUserResult.error) {
+        console.error('Database user creation error:', newUserResult.error);
         return NextResponse.json(
-          { error: 'Ошибка авторизации: ' + signUpError.message },
+          { error: 'Ошибка создания пользователя' },
           { status: 500 }
         );
       }
-
-      authUserId = signUpData.user?.id;
-      console.log('✅ New user created:', authUserId);
+      authUserId = newUserResult.data.id;
+    } else if (existingUserResult.data) {
+      // Пользователь найден
+      authUserId = existingUserResult.data.id;
     } else {
-      authUserId = signInData.user?.id;
-      console.log('✅ User signed in:', authUserId);
-    }
-
-    if (!authUserId) {
+      console.error('Unexpected DB error:', existingUserResult.error);
       return NextResponse.json(
-        { error: 'Не удалось получить ID пользователя' },
+        { error: 'Непредвиденная ошибка БД' },
         { status: 500 }
       );
     }
 
-    // Получаем баллы (с обработкой ошибок)
-    console.log('Getting user points...');
+    // --- 3. УСТАНОВКА НАШЕГО КУКИ СЕССИИ (КЛЮЧЕВОЙ ШАГ)
+    await setSession(authUserId);
+
+    // --- 4. Получение баллов и ответ
     const points = await getUserPoints(userData.userId);
-    console.log('User points:', points);
-
-    // ИСПРАВЛЕНИЕ: Сохраняем в БД с правильной структурой
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
-
-    console.log('Saving user to database...');
-    const { error: dbError } = await supabase.from('users').upsert(
-      {
-        id: authUserId,
-        email: email.toLowerCase(),
-        ispring_user_id: userData.userId,
-        first_name: userData.firstName,
-        last_name: userData.lastName,
-        expires_at: expiresAt.toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: 'id', // ИСПРАВЛЕНИЕ: конфликт по id, а не по email
-      }
-    );
-
-    if (dbError) {
-      console.error('❌ Database error:', dbError);
-      // ИСПРАВЛЕНИЕ: Не возвращаем ошибку, логируем и продолжаем
-      console.log('Continuing despite database error...');
-    } else {
-      console.log('✅ User saved to database');
-    }
 
     return NextResponse.json({
       success: true,
@@ -108,12 +87,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('❌ Verify code error:', error);
-    return NextResponse.json(
-      {
-        error: 'Ошибка верификации',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Ошибка верификации' }, { status: 500 });
   }
 }

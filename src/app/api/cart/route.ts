@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getSession } from '@/lib/sessions';
 
 export async function GET() {
   try {
     const supabase = await createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -15,7 +13,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('cart_items')
       .select('*, products(*)')
-      .eq('user_id', session.user.id);
+      .eq('user_id', session.userId);
 
     if (error) {
       return NextResponse.json(
@@ -34,9 +32,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await getSession();
 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -57,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Добавляем в корзину
     const { error } = await supabase.from('cart_items').upsert({
-      user_id: session.user.id,
+      user_id: session.userId,
       product_id,
       quantity,
       price: product.price * quantity,
@@ -80,9 +76,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await getSession();
 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -93,7 +87,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from('cart_items')
       .delete()
-      .eq('user_id', session.user.id)
+      .eq('user_id', session.userId)
       .eq('product_id', product_id);
 
     if (error) {

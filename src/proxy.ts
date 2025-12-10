@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getSession } from './lib/sessions';
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -25,9 +26,7 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const session = await getSession();
 
   const protectedPaths = ['/cart', '/orders', '/account'];
   const isProtectedPath = protectedPaths.some((path) =>

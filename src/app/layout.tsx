@@ -7,6 +7,7 @@ import { Metadata } from 'next/types';
 import { Header } from '@/components/layout/header/header';
 import { Footer } from '@/components/layout/footer/footer';
 import { cookies } from 'next/headers';
+import { getSession } from '@/lib/sessions';
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
@@ -30,19 +31,23 @@ export const metadata: Metadata = {
 async function getUserData() {
   try {
     const supabase = await createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+
+    // 1. ИСПОЛЬЗУЕМ НАШУ СЕССИЮ
+    const session = await getSession();
 
     if (!session) return null;
 
-    const { data: userData } = await supabase
+    // 2. ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО НАШЕМУ ID
+    const { data: userData, error } = await supabase
       .from('users')
-      .select('*')
-      .eq('email', session.user.email)
+      .select('first_name, last_name, ispring_user_id')
+      .eq('id', session.userId) // <-- Ищем по нашему ID
       .single();
 
-    if (!userData) return null;
+    if (error || !userData) {
+      console.error('Error fetching user from DB:', error);
+      return null;
+    }
 
     const points = await getUserPoints(userData.ispring_user_id);
 
@@ -59,19 +64,18 @@ async function getUserData() {
 async function getCartItemsCount() {
   try {
     const supabase = await createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await getSession();
 
     if (!session) return 0;
 
     const { data } = await supabase
       .from('cart_items_web')
       .select('quantity', { count: 'exact' })
-      .eq('user_id', session.user.id);
+      .eq('user_id', session.userId);
 
     return data?.reduce((sum, item) => sum + item.quantity, 0) || 0;
   } catch (error) {
+    console.error(error);
     return 0;
   }
 }
