@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
+import placeholder from './img/placeholder.png';
 import styles from './productCard.module.scss';
 
 interface ProductCardProps {
@@ -23,7 +24,7 @@ export function ProductCard({
     <div className={styles.card}>
       <Link href={`/product/${product.id}`} className={styles.imageWrapper}>
         <Image
-          src={product.image_url || '/placeholder.jpg'}
+          src={product.image_url || placeholder}
           alt={product.name}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
