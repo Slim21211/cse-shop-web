@@ -72,8 +72,8 @@ export const metadata: Metadata = {
     images: ['/logogo.png'],
   },
   verification: {
-    // google: 'your-google-verification-code', // Добавьте после регистрации в Search Console
-    // yandex: 'your-yandex-verification-code', // Добавьте после регистрации в Яндекс.Вебмастер
+    google: 'google3c0a4e6f6ac51e49.html',
+    yandex: '3ecde8c325b8a551',
   },
 };
 
