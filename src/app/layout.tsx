@@ -18,14 +18,62 @@ const inter = Inter({
 const THEME_COOKIE_KEY = 'cse-theme';
 
 export const metadata: Metadata = {
-  title: 'КСЭ - Магазин подарков',
-  description: 'Интернет-магазин корпоративных подарков и мерча компании КСЭ',
-  keywords: 'КСЭ, подарки, мерч, баллы, корпоративный магазин',
-  authors: [{ name: 'КСЭ' }],
+  metadataBase: new URL('https://gift-shop.cse.ru'), // Ваш домен
+  title: {
+    default: 'КСЭ - Магазин подарков',
+    template: '%s | КСЭ Магазин подарков',
+  },
+  description:
+    'Интернет-магазин корпоративных подарков и мерча компании КСЭ. Обменивайте заработанные баллы на фирменную одежду, аксессуары и эксклюзивные подарки.',
+  keywords: [
+    'КСЭ',
+    'подарки КСЭ',
+    'мерч КСЭ',
+    'корпоративные подарки',
+    'баллы КСЭ',
+    'магазин подарков',
+    'фирменная одежда',
+    'корпоративный магазин',
+  ],
+  authors: [{ name: 'КСЭ', url: 'https://cse.ru' }],
+  creator: 'КСЭ',
+  publisher: 'КСЭ',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   openGraph: {
+    type: 'website',
+    locale: 'ru_RU',
+    url: 'https://cse-shop.ru',
+    title: 'КСЭ - Магазин подарков',
+    description: 'Обменивайте баллы на фирменный мерч и подарки компании КСЭ',
+    siteName: 'КСЭ Магазин подарков',
+    images: [
+      {
+        url: '/logogo.png',
+        width: 1200,
+        height: 630,
+        alt: 'КСЭ Магазин подарков',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
     title: 'КСЭ - Магазин подарков',
     description: 'Обменивайте баллы на фирменный мерч и подарки',
-    type: 'website',
+    images: ['/logogo.png'],
+  },
+  verification: {
+    // google: 'your-google-verification-code', // Добавьте после регистрации в Search Console
+    // yandex: 'your-yandex-verification-code', // Добавьте после регистрации в Яндекс.Вебмастер
   },
 };
 
