@@ -18,7 +18,7 @@ const inter = Inter({
 const THEME_COOKIE_KEY = 'cse-theme';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://gift-shop.cse.ru'), // Ваш домен
+  metadataBase: new URL('https://cse-shop.ru'),
   title: {
     default: 'КСЭ - Магазин подарков',
     template: '%s | КСЭ Магазин подарков',
