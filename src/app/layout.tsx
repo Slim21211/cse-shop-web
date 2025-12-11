@@ -1,13 +1,14 @@
+// app/layout.tsx
 import { Inter } from 'next/font/google';
+import { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import '@/styles/globals.css';
-import { StoreProvider } from '@/lib/store/storeProvider';
 import { createClient } from '@/lib/supabase/server';
 import { getUserPoints } from '@/lib/ispring/api';
-import { Metadata } from 'next/types';
+import { getSession } from '@/lib/sessions';
 import { Header } from '@/components/layout/header/header';
 import { Footer } from '@/components/layout/footer/footer';
-import { cookies } from 'next/headers';
-import { getSession } from '@/lib/sessions';
+import { StoreProvider } from '@/components/providers/storeProvider';
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
@@ -30,22 +31,19 @@ export const metadata: Metadata = {
 
 async function getUserData() {
   try {
-    const supabase = await createClient();
-
-    // 1. ИСПОЛЬЗУЕМ НАШУ СЕССИЮ
     const session = await getSession();
-
     if (!session) return null;
 
-    // 2. ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО НАШЕМУ ID
+    const supabase = await createClient();
+
     const { data: userData, error } = await supabase
       .from('users')
       .select('first_name, last_name, ispring_user_id')
-      .eq('id', session.userId) // <-- Ищем по нашему ID
+      .eq('id', session.userId)
       .single();
 
     if (error || !userData) {
-      console.error('Error fetching user from DB:', error);
+      console.error('❌ Error fetching user from DB:', error);
       return null;
     }
 
@@ -56,26 +54,26 @@ async function getUserData() {
       points,
     };
   } catch (error) {
-    console.error('Error fetching user data:', error);
+    console.error('❌ Error fetching user data:', error);
     return null;
   }
 }
 
 async function getCartItemsCount() {
   try {
-    const supabase = await createClient();
     const session = await getSession();
-
     if (!session) return 0;
 
+    const supabase = await createClient();
+
     const { data } = await supabase
-      .from('cart_items_web')
+      .from('cart_items')
       .select('quantity', { count: 'exact' })
       .eq('user_id', session.userId);
 
     return data?.reduce((sum, item) => sum + item.quantity, 0) || 0;
   } catch (error) {
-    console.error(error);
+    console.error('❌ Error fetching cart count:', error);
     return 0;
   }
 }
@@ -85,10 +83,11 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getUserData();
-  const cartItemsCount = await getCartItemsCount();
+  const [user, cartItemsCount] = await Promise.all([
+    getUserData(),
+    getCartItemsCount(),
+  ]);
 
-  // ИСПРАВЛЕНО: Чтение куки на сервере с использованием 'await'
   const cookieStore = await cookies();
   const storedTheme = cookieStore.get(THEME_COOKIE_KEY)?.value as
     | 'light'
@@ -100,7 +99,6 @@ export default async function RootLayout({
 
   return (
     <html lang="ru" data-theme={ssrTheme} suppressHydrationWarning>
-      <head>{/* Скрипты темы удалены */}</head>
       <body className={inter.className}>
         <StoreProvider>
           <Header user={user} cartItemsCount={cartItemsCount} />

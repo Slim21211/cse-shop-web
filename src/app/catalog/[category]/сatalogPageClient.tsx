@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Home } from 'lucide-react';
+import { Home, Gift, ShoppingBag } from 'lucide-react';
 import { useGetProductsQuery } from '@/lib/store/api/productsApi';
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
 import { addToCart, selectCartItems } from '@/lib/store/slices/cartSlice';
+import { useIsMobile } from '@/lib/hooks/useMediaQuery';
 import type { Product } from '@/types';
 import { ProductCard } from '@/components/product/productCard/productCard';
 import styles from './page.module.scss';
@@ -20,6 +21,7 @@ export default function CatalogPageClient({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
+  const isMobile = useIsMobile();
 
   const { data: products, isLoading, error } = useGetProductsQuery(category);
 
@@ -44,6 +46,7 @@ export default function CatalogPageClient({
 
       if (response.ok) {
         dispatch(addToCart(product));
+        router.refresh();
       }
     } catch (error) {
       console.error('Add to cart error:', error);
@@ -52,6 +55,34 @@ export default function CatalogPageClient({
 
   const isInCart = (productId: number) => {
     return cartItems.some((item) => item.product.id === productId);
+  };
+
+  // Определяем кнопку навигации в зависимости от устройства и категории
+  const renderNavigationButton = () => {
+    if (!isMobile) {
+      // На десктопе всегда "На главную"
+      return (
+        <Link href="/" className={styles.navButton}>
+          <Home size={20} />
+          На главную
+        </Link>
+      );
+    }
+
+    // На мобильных показываем переключатель между категориями
+    if (category === 'merch') {
+      return (
+        <Link href="/catalog/gifts" className={styles.navButton}>
+          <Gift size={20} />К подаркам
+        </Link>
+      );
+    } else {
+      return (
+        <Link href="/catalog/merch" className={styles.navButton}>
+          <ShoppingBag size={20} />К мерчу
+        </Link>
+      );
+    }
   };
 
   if (isLoading) {
@@ -83,13 +114,7 @@ export default function CatalogPageClient({
   return (
     <div className={styles.page}>
       <div className="container">
-        {/* ИСПРАВЛЕНИЕ: Кнопка на главную */}
-        <div className={styles.navigation}>
-          <Link href="/" className={styles.homeButton}>
-            <Home size={20} />
-            На главную
-          </Link>
-        </div>
+        <div className={styles.navigation}>{renderNavigationButton()}</div>
 
         <div className={styles.header}>
           <h1 className={styles.title}>{categoryTitle}</h1>

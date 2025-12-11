@@ -1,3 +1,5 @@
+// lib/ispring/api.ts
+
 interface ISpringTokenResponse {
   access_token: string;
   expires_in: number;
@@ -28,17 +30,7 @@ export async function getISpringToken(): Promise<string> {
     return tokenCache.token;
   }
 
-  // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ
   console.log('🔑 Requesting new iSpring token...');
-  console.log('ISPRING_DOMAIN:', process.env.ISPRING_DOMAIN);
-  console.log(
-    'ISPRING_CLIENT_ID:',
-    process.env.ISPRING_CLIENT_ID ? '✅ Set' : '❌ NOT SET'
-  );
-  console.log(
-    'ISPRING_CLIENT_SECRET:',
-    process.env.ISPRING_CLIENT_SECRET ? '✅ Set' : '❌ NOT SET'
-  );
 
   if (
     !process.env.ISPRING_DOMAIN ||
@@ -49,18 +41,11 @@ export async function getISpringToken(): Promise<string> {
   }
 
   const url = `https://${process.env.ISPRING_DOMAIN}/api/v3/token`;
-  console.log('Request URL:', url);
 
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: process.env.ISPRING_CLIENT_ID,
     client_secret: process.env.ISPRING_CLIENT_SECRET,
-  });
-
-  console.log('Request body:', {
-    grant_type: 'client_credentials',
-    client_id: process.env.ISPRING_CLIENT_ID.substring(0, 8) + '...',
-    client_secret: '***',
   });
 
   try {
@@ -72,12 +57,6 @@ export async function getISpringToken(): Promise<string> {
       },
       body: body.toString(),
     });
-
-    console.log('Response status:', response.status);
-    console.log(
-      'Response headers:',
-      Object.fromEntries(response.headers.entries())
-    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -161,12 +140,15 @@ export async function getUserPoints(userId: string): Promise<number> {
 
     console.log('💰 Getting points for user:', userId);
 
-    // ИСПРАВЛЕНИЕ: Правильный URL и заголовки
+    // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+    // 1. Используем правильный домен (как в боте)
+    // 2. Токен БЕЗ префикса "Bearer"
+    // 3. Accept: application/xml
     const response = await fetch(
-      `https://${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
+      `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
       {
         headers: {
-          Authorization: token, // Без "Bearer"
+          Authorization: token, // Без "Bearer"!
           Accept: 'application/xml',
         },
       }
@@ -177,12 +159,16 @@ export async function getUserPoints(userId: string): Promise<number> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Failed to get user points:', errorText);
-      return 0; // Возвращаем 0 вместо ошибки
+      return 0;
     }
 
     const xml = await response.text();
-    console.log('Points XML response:', xml.substring(0, 200));
+    console.log(
+      'Points XML response (first 200 chars):',
+      xml.substring(0, 200)
+    );
 
+    // Парсим XML ответ
     const pointsMatch = xml.match(/<points>(\d+)<\/points>/);
     const points = pointsMatch ? parseInt(pointsMatch[1], 10) : 0;
 
@@ -190,7 +176,7 @@ export async function getUserPoints(userId: string): Promise<number> {
     return points;
   } catch (error) {
     console.error('❌ Error getting user points:', error);
-    return 0; // Возвращаем 0 при любой ошибке
+    return 0;
   }
 }
 
@@ -199,27 +185,43 @@ export async function withdrawPoints(
   amount: number,
   reason: string
 ): Promise<boolean> {
-  const token = await getISpringToken();
+  try {
+    const token = await getISpringToken();
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <withdrawGamificationPoints>
   <userId>${userId}</userId>
   <amount>${amount}</amount>
   <reason>${reason}</reason>
 </withdrawGamificationPoints>`;
 
-  const response = await fetch(
-    `https://${process.env.ISPRING_API_DOMAIN}/gamification/points/withdraw`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: token,
-        'Content-Type': 'application/xml',
-        Accept: 'application/xml',
-      },
-      body: xml,
-    }
-  );
+    console.log('💸 Withdrawing points:', { userId, amount, reason });
 
-  return response.ok;
+    const response = await fetch(
+      `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points/withdraw`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: token, // Без "Bearer"!
+          'Content-Type': 'application/xml',
+          Accept: 'application/xml',
+        },
+        body: xml,
+      }
+    );
+
+    console.log('Withdraw response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to withdraw points:', errorText);
+      return false;
+    }
+
+    console.log('✅ Points withdrawn successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Error withdrawing points:', error);
+    return false;
+  }
 }

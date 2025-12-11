@@ -1,8 +1,13 @@
 import Link from 'next/link';
 import { ArrowRight, Gift, ShoppingBag } from 'lucide-react';
+import { getSession } from '@/lib/sessions';
 import styles from './page.module.scss';
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Проверяем авторизацию на сервере
+  const session = await getSession();
+  const isAuthenticated = !!session;
+
   return (
     <div className={styles.page}>
       {/* Hero Section */}
@@ -19,8 +24,11 @@ export default function HomePage() {
               Посмотреть каталог
               <ArrowRight size={20} />
             </Link>
-            <Link href="/login" className={styles.secondaryButton}>
-              Войти в аккаунт
+            <Link
+              href={isAuthenticated ? '/account' : '/login'}
+              className={styles.secondaryButton}
+            >
+              {isAuthenticated ? 'Посмотреть профиль' : 'Войти в аккаунт'}
             </Link>
           </div>
         </div>
