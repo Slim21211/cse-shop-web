@@ -31,11 +31,14 @@
   }
 }
 
-.logoText {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-primary);
+/* ЗАМЕНА: Новый стиль для SVG логотипа */
+.logoSvg {
+  height: 32px; // Задаем высоту, чтобы он был виден
+  width: auto;
+  color: var(--color-primary); // Используем переменную для цвета
 }
+
+// .logoText - УДАЛЕН
 
 .logoSubtext {
   font-size: var(--font-size-xs);
@@ -165,6 +168,11 @@
     // На мобилках используем простую flexbox структуру
     display: flex;
     justify-content: space-between;
+  }
+
+  /* На мобилках делаем SVG меньше */
+  .logoSvg {
+    height: 24px;
   }
 
   .actions {
