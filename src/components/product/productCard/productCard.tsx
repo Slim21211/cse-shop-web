@@ -22,7 +22,7 @@ export function ProductCard({
 
   return (
     <div className={styles.card}>
-      <Link href={`/product/${product.id}`} className={styles.imageWrapper}>
+      <Link href="" className={styles.imageWrapper}>
         <Image
           src={product.image_url || placeholder}
           alt={product.name}
@@ -38,7 +38,7 @@ export function ProductCard({
       </Link>
 
       <div className={styles.content}>
-        <Link href={`/product/${product.id}`} className={styles.name}>
+        <Link href="" className={styles.name}>
           {product.name}
         </Link>
 
