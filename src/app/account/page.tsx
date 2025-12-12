@@ -3,7 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { User, Mail, Award, Package, ArrowLeft, LogOut } from 'lucide-react';
+import {
+  User,
+  Mail,
+  Award,
+  Package,
+  ArrowLeft,
+  LogOut,
+  Shield,
+} from 'lucide-react';
 import styles from './page.module.scss';
 
 interface Order {
@@ -29,10 +37,12 @@ export default function AccountPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     fetchUserData();
     fetchOrders();
+    checkAdmin();
   }, []);
 
   const fetchUserData = async () => {
@@ -77,6 +87,16 @@ export default function AccountPage() {
     }
   };
 
+  const checkAdmin = async () => {
+    try {
+      const response = await fetch('/api/user/is-admin');
+      const data = await response.json();
+      setIsAdmin(data.isAdmin || false);
+    } catch (error) {
+      console.error('Failed to check admin status:', error);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -84,6 +104,15 @@ export default function AccountPage() {
       router.refresh();
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+
+  const handleAdminPanel = () => {
+    if (user?.email) {
+      const adminUrl = `https://cse-shop-admin.vercel.app/?email=${encodeURIComponent(
+        user.email
+      )}`;
+      window.open(adminUrl, '_blank');
     }
   };
 
@@ -164,6 +193,14 @@ export default function AccountPage() {
                 </div>
               </div>
             </div>
+
+            {/* Кнопка админ-панели (только для админов) */}
+            {isAdmin && (
+              <button onClick={handleAdminPanel} className={styles.adminButton}>
+                <Shield size={20} />
+                Панель администратора
+              </button>
+            )}
 
             <button onClick={handleLogout} className={styles.logoutButton}>
               <LogOut size={20} />
