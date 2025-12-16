@@ -1,0 +1,103 @@
+.carousel {
+  position: relative;
+  width: 100%;
+}
+
+.imageWrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background-color: var(--background-secondary);
+}
+
+.image {
+  object-fit: cover;
+  transition: transform 0.3s ease;
+
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-color);
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+}
+
+.arrowLeft {
+  left: var(--spacing-sm);
+}
+
+.arrowRight {
+  right: var(--spacing-sm);
+}
+
+.indicators {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) 0;
+  position: absolute;
+  bottom: var(--spacing-sm);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.2);
+  }
+}
+
+.indicatorActive {
+  background-color: white;
+  width: 24px;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .arrow {
+    width: 28px;
+    height: 28px;
+  }
+
+  .arrowLeft {
+    left: var(--spacing-xs);
+  }
+
+  .arrowRight {
+    right: var(--spacing-xs);
+  }
+}

@@ -1,11 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
-import placeholder from './img/placeholder.png';
 import styles from './productCard.module.scss';
+import { ImageCarousel } from '@/components/imageCarousel/imageCarousel';
 
 interface ProductCardProps {
   product: Product;
@@ -24,6 +23,18 @@ function pluralizePoints(count: number): string {
   ];
 }
 
+// Функция для получения массива изображений
+function getProductImages(product: Product): string[] {
+  // Приоритет: image_urls -> image_url -> пустой массив
+  if (product.image_urls && product.image_urls.length > 0) {
+    return product.image_urls;
+  }
+  if (product.image_url) {
+    return [product.image_url];
+  }
+  return [];
+}
+
 export function ProductCard({
   product,
   onAddToCart,
@@ -31,31 +42,34 @@ export function ProductCard({
 }: ProductCardProps) {
   const isOutOfStock = product.remains === 0;
   const hasDiscount = !!product.old_price && product.old_price > product.price;
+  const images = getProductImages(product);
 
   return (
     <div className={styles.card}>
-      <Link href="" className={styles.imageWrapper}>
-        {hasDiscount && (
-          <div className={styles.discountBadge}>
-            -
-            {Math.round(
-              ((product.old_price! - product.price) / product.old_price!) * 100
-            )}
-            %
-          </div>
-        )}
-        <Image
-          src={product.image_url || placeholder}
+      <Link href="" className={styles.carouselLink}>
+        <ImageCarousel
+          images={images}
           alt={product.name}
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          className={styles.image}
+          discountBadge={
+            hasDiscount ? (
+              <div className={styles.discountBadge}>
+                -
+                {Math.round(
+                  ((product.old_price! - product.price) / product.old_price!) *
+                    100
+                )}
+                %
+              </div>
+            ) : undefined
+          }
+          outOfStockOverlay={
+            isOutOfStock ? (
+              <div className={styles.outOfStock}>
+                <span>Появится в феврале</span>
+              </div>
+            ) : undefined
+          }
         />
-        {isOutOfStock && (
-          <div className={styles.outOfStock}>
-            <span>Нет в наличии</span>
-          </div>
-        )}
       </Link>
 
       <div className={styles.content}>

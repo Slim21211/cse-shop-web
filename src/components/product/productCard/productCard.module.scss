@@ -13,15 +13,12 @@
   }
 }
 
-.imageWrapper {
-  position: relative;
+.carouselLink {
+  display: block;
   width: 100%;
-  aspect-ratio: 1;
-  overflow: hidden;
-  background-color: var(--background-secondary);
 }
 
-// НОВОЕ: Бейдж со скидкой
+// НОВОЕ: Бейдж со скидкой (теперь внутри карусели)
 .discountBadge {
   position: absolute;
   top: var(--spacing-md);
@@ -36,15 +33,6 @@
   box-shadow: var(--shadow-md);
 }
 
-.image {
-  object-fit: cover;
-  transition: transform 0.3s ease;
-
-  .card:hover & {
-    transform: scale(1.05);
-  }
-}
-
 .outOfStock {
   position: absolute;
   inset: 0;
@@ -52,7 +40,7 @@
   align-items: center;
   justify-content: center;
   background-color: rgba(0, 0, 0, 0.7);
-  z-index: 1;
+  z-index: 2; // Под стрелками карусели
 
   span {
     color: white;
