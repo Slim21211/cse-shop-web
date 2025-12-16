@@ -3,38 +3,86 @@
 }
 
 .hero {
+  position: relative;
   padding: var(--spacing-2xl) 0;
+  min-height: 360px; // Минимальная высота = высота картинки
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+// НОВОЕ: Background image wrapper
+.heroBackground {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.heroImage {
+  object-fit: cover;
+  object-position: center;
+
+  // Для экранов шире 1024px - обрезаем по краям
+  @media (min-width: 1025px) {
+    object-fit: cover;
+  }
+
+  // Для мобильных - показываем центр
+  @media (max-width: 768px) {
+    object-position: center center;
+  }
+}
+
+// КЛЮЧЕВОЕ: Градиентный оверлей для контраста
+.heroOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+
+  // Вариант 1: Темный градиент сверху вниз
   background: linear-gradient(
-    135deg,
-    var(--color-primary) 0%,
-    var(--color-secondary) 100%
+    180deg,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0.5) 100%
   );
-  color: white;
-  text-align: center;
+
+  // Вариант 2 (закомментирован): Градиент от центра
+  // background: radial-gradient(
+  //   ellipse at center,
+  //   rgba(0, 0, 0, 0.2) 0%,
+  //   rgba(0, 0, 0, 0.6) 100%
+  // );
 }
 
 .heroContainer {
+  position: relative;
+  z-index: 2; // Поверх фона и оверлея
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-lg);
+  text-align: center;
 }
 
 .heroTitle {
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-bold);
   margin: 0;
+  color: white; // ИЗМЕНЕНО: белый текст для контраста
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5); // Тень для читаемости
 }
 
 .accent {
-  color: var(--color-white);
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  color: var(--color-primary);
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(254, 80, 0, 0.5); // Свечение
 }
 
 .heroSubtitle {
   font-size: var(--font-size-xl);
-  opacity: 0.95;
   max-width: 600px;
+  color: white; // ИЗМЕНЕНО: белый текст
+  text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.7); // Тень для читаемости
 }
 
 .heroActions {
@@ -54,34 +102,39 @@
   font-weight: var(--font-weight-medium);
   border-radius: var(--border-radius-lg);
   transition: all 0.3s;
+  text-shadow: none; // Убираем тень у кнопок
 }
 
 .primaryButton {
-  background-color: white;
-  color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: white;
+  box-shadow: 0 4px 12px rgba(254, 80, 0, 0.4); // Тень для "отрыва" от фона
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 20px rgba(254, 80, 0, 0.5);
     opacity: 1;
   }
 }
 
 .secondaryButton {
-  background-color: transparent;
-  color: white;
+  background-color: white;
+  color: var(--color-primary);
   border: 2px solid white;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
 
   &:hover {
-    background-color: white;
-    color: var(--color-primary);
+    background-color: rgba(255, 255, 255, 0.95);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 255, 255, 0.4);
     opacity: 1;
   }
 }
 
+// Остальные секции остаются без изменений
 .categories {
   padding: var(--spacing-2xl) 0;
-  background-color: var(--background-color); // ИСПРАВЛЕНИЕ: явный фон
+  background-color: var(--background-color);
 }
 
 .sectionTitle {
@@ -151,7 +204,6 @@
   font-weight: var(--font-weight-medium);
 }
 
-// ИСПРАВЛЕНИЕ: Другой цвет фона для Features
 .features {
   padding: var(--spacing-2xl) 0;
   background: linear-gradient(
@@ -198,6 +250,11 @@
 }
 
 @media (max-width: 768px) {
+  .hero {
+    min-height: 300px; // Меньше высота на мобильных
+    padding: var(--spacing-xl) 0;
+  }
+
   .heroTitle {
     font-size: var(--font-size-2xl);
   }

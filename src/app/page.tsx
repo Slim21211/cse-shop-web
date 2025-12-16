@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Gift, ShoppingBag } from 'lucide-react';
 import { getSession } from '@/lib/sessions';
 import styles from './page.module.scss';
 
+import banner from './banner.png';
+
 export default async function HomePage() {
-  // Проверяем авторизацию на сервере
   const session = await getSession();
   const isAuthenticated = !!session;
 
@@ -12,6 +14,21 @@ export default async function HomePage() {
     <div className={styles.page}>
       {/* Hero Section */}
       <section className={styles.hero}>
+        {/* Background Image */}
+        <div className={styles.heroBackground}>
+          <Image
+            src={banner} // Замените на ваш путь
+            alt="Hero Background"
+            fill
+            priority
+            quality={90}
+            className={styles.heroImage}
+          />
+          {/* Градиентный оверлей для контраста */}
+          <div className={styles.heroOverlay} />
+        </div>
+
+        {/* Content поверх фона */}
         <div className={`container ${styles.heroContainer}`}>
           <h1 className={styles.heroTitle}>
             Магазин подарков <span className={styles.accent}>КСЭ</span>
