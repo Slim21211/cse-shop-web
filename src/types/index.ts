@@ -3,6 +3,8 @@ export type Product = {
   name: string;
   size: string | null;
   price: number;
+  old_price?: number | null; // НОВОЕ: старая цена
+  description?: string | null; // НОВОЕ: описание
   remains: number;
   image_url?: string | null;
   is_gift: boolean;

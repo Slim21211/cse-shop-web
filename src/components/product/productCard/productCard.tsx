@@ -13,16 +13,37 @@ interface ProductCardProps {
   isInCart?: boolean;
 }
 
+// Функция для склонения слова "балл"
+function pluralizePoints(count: number): string {
+  const cases = [2, 0, 1, 1, 1, 2];
+  const titles = ['балл', 'балла', 'баллов'];
+  return titles[
+    count % 100 > 4 && count % 100 < 20
+      ? 2
+      : cases[count % 10 < 5 ? count % 10 : 5]
+  ];
+}
+
 export function ProductCard({
   product,
   onAddToCart,
   isInCart,
 }: ProductCardProps) {
   const isOutOfStock = product.remains === 0;
+  const hasDiscount = !!product.old_price && product.old_price > product.price;
 
   return (
     <div className={styles.card}>
       <Link href="" className={styles.imageWrapper}>
+        {hasDiscount && (
+          <div className={styles.discountBadge}>
+            -
+            {Math.round(
+              ((product.old_price! - product.price) / product.old_price!) * 100
+            )}
+            %
+          </div>
+        )}
         <Image
           src={product.image_url || placeholder}
           alt={product.name}
@@ -42,12 +63,21 @@ export function ProductCard({
           {product.name}
         </Link>
 
+        {product.description && (
+          <p className={styles.description}>{product.description}</p>
+        )}
+
         {product.size && <p className={styles.size}>Размер: {product.size}</p>}
 
         <div className={styles.footer}>
           <div className={styles.priceInfo}>
             <span className={styles.price}>{product.price}</span>
-            <span className={styles.currency}>баллов</span>
+            {hasDiscount && (
+              <span className={styles.oldPrice}>{product.old_price}</span>
+            )}
+            <span className={styles.currency}>
+              {pluralizePoints(product.price)}
+            </span>
           </div>
 
           {!isOutOfStock && (
