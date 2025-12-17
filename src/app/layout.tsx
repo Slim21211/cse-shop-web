@@ -38,6 +38,20 @@ export const metadata: Metadata = {
   authors: [{ name: 'КСЭ', url: 'https://cse.ru' }],
   creator: 'КСЭ',
   publisher: 'КСЭ',
+
+  // ✅ Иконки для браузера и поисковиков
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+
+  // ✅ Манифест для PWA
+  manifest: '/manifest.json',
+
   robots: {
     index: true,
     follow: true,
@@ -49,6 +63,8 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
+
+  // ✅ OpenGraph для социальных сетей (Telegram, VK, FB)
   openGraph: {
     type: 'website',
     locale: 'ru_RU',
@@ -58,22 +74,36 @@ export const metadata: Metadata = {
     siteName: 'КСЭ Магазин подарков',
     images: [
       {
-        url: '/logogo.png',
+        url: '/og-image.png', // ✅ Правильный путь в /public
         width: 1200,
         height: 630,
         alt: 'КСЭ Магазин подарков',
+        type: 'image/png',
       },
     ],
   },
+
+  // ✅ Twitter Card (используется и другими соцсетями)
   twitter: {
     card: 'summary_large_image',
     title: 'КСЭ - Магазин подарков',
     description: 'Обменивайте баллы на фирменный мерч и подарки',
-    images: ['/logogo.png'],
+    images: ['/og-image.png'],
   },
+
+  // ✅ Верификация для поисковиков
   verification: {
     google: 'google3c0a4e6f6ac51e49.html',
     yandex: '3ecde8c325b8a551',
+  },
+
+  // ✅ Дополнительные метатеги
+  other: {
+    // Telegram специфичные теги
+    'telegram:card': 'summary_large_image',
+    'telegram:image': 'https://cse-shop.ru/og-image.png',
+    // VK
+    'vk:image': 'https://cse-shop.ru/og-image.png',
   },
 };
 
@@ -147,6 +177,32 @@ export default async function RootLayout({
 
   return (
     <html lang="ru" data-theme={ssrTheme} suppressHydrationWarning>
+      <head>
+        {/* ✅ Дополнительные метатеги для форсирования обновления */}
+        <meta httpEquiv="cache-control" content="no-cache" />
+        <meta httpEquiv="expires" content="0" />
+        <meta httpEquiv="pragma" content="no-cache" />
+
+        {/* ✅ Явные Open Graph теги (дублирование для надежности) */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://cse-shop.ru" />
+        <meta property="og:title" content="КСЭ - Магазин подарков" />
+        <meta
+          property="og:description"
+          content="Обменивайте баллы на фирменный мерч и подарки компании КСЭ"
+        />
+        <meta property="og:image" content="https://cse-shop.ru/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="КСЭ Магазин подарков" />
+
+        {/* ✅ Telegram специфичные */}
+        <meta name="telegram:card" content="summary_large_image" />
+        <meta
+          name="telegram:image"
+          content="https://cse-shop.ru/og-image.png"
+        />
+      </head>
       <body className={inter.className}>
         <StoreProvider>
           <Header user={user} cartItemsCount={cartItemsCount} />
