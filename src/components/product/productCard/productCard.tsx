@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Loader2 } from 'lucide-react';
 import type { Product } from '@/types';
 import styles from './productCard.module.scss';
 import { ImageCarousel } from '@/components/imageCarousel/imageCarousel';
@@ -40,9 +41,22 @@ export function ProductCard({
   onAddToCart,
   isInCart,
 }: ProductCardProps) {
+  const [isAdding, setIsAdding] = useState(false);
   const isOutOfStock = product.remains === 0;
   const hasDiscount = !!product.old_price && product.old_price > product.price;
   const images = getProductImages(product);
+
+  const handleAddToCart = async () => {
+    if (!onAddToCart || isInCart || isAdding) return;
+
+    setIsAdding(true);
+    try {
+      await onAddToCart(product);
+    } finally {
+      // Небольшая задержка для визуальной обратной связи
+      setTimeout(() => setIsAdding(false), 300);
+    }
+  };
 
   return (
     <div className={styles.card}>
@@ -96,14 +110,26 @@ export function ProductCard({
 
           {!isOutOfStock && (
             <button
-              onClick={() => onAddToCart?.(product)}
+              onClick={handleAddToCart}
               className={`${styles.cartButton} ${
                 isInCart ? styles.inCart : ''
-              }`}
-              disabled={isInCart}
+              } ${isAdding ? styles.adding : ''}`}
+              disabled={isInCart || isAdding}
             >
-              <ShoppingCart size={18} />
-              {isInCart ? 'В корзине' : 'В корзину'}
+              {isAdding ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  Добавление...
+                </>
+              ) : isInCart ? (
+                <>
+                  <ShoppingCart size={18} />В корзине
+                </>
+              ) : (
+                <>
+                  <ShoppingCart size={18} />В корзину
+                </>
+              )}
             </button>
           )}
         </div>

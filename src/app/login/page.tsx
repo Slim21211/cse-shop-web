@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import styles from './page.module.scss';
 
 export default function LoginPage() {
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState('');
   const [userData, setUserData] = useState(null);
 
@@ -76,13 +77,16 @@ export default function LoginPage() {
         return;
       }
 
-      // Успешная авторизация - редирект
-      router.push(redirect);
-      router.refresh();
+      // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Показываем состояние "Перенаправление..."
+      setIsRedirecting(true);
+
+      // Используем window.location для гарантированного редиректа
+      // router.push может задерживаться из-за prefetching
+      window.location.href = redirect;
     } catch (err) {
       setError('Произошла ошибка');
-    } finally {
       setLoading(false);
+      setIsRedirecting(false);
     }
   };
 
@@ -111,6 +115,7 @@ export default function LoginPage() {
                   required
                   className={styles.input}
                   autoFocus
+                  disabled={loading}
                 />
               </div>
 
@@ -119,8 +124,17 @@ export default function LoginPage() {
                 disabled={loading}
                 className={styles.button}
               >
-                {loading ? 'Отправка...' : 'Продолжить'}
-                <ArrowRight size={20} />
+                {loading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} />
+                    Отправка...
+                  </>
+                ) : (
+                  <>
+                    Продолжить
+                    <ArrowRight size={20} />
+                  </>
+                )}
               </button>
             </form>
           ) : (
@@ -136,6 +150,7 @@ export default function LoginPage() {
                   maxLength={6}
                   className={styles.input}
                   autoFocus
+                  disabled={loading || isRedirecting}
                 />
               </div>
 
@@ -147,17 +162,32 @@ export default function LoginPage() {
                   setError('');
                 }}
                 className={styles.backButton}
+                disabled={loading || isRedirecting}
               >
                 Изменить email
               </button>
 
               <button
                 type="submit"
-                disabled={loading || code.length !== 6}
+                disabled={loading || isRedirecting || code.length !== 6}
                 className={styles.button}
               >
-                {loading ? 'Проверка...' : 'Войти'}
-                <ArrowRight size={20} />
+                {isRedirecting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} />
+                    Перенаправление...
+                  </>
+                ) : loading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} />
+                    Проверка...
+                  </>
+                ) : (
+                  <>
+                    Войти
+                    <ArrowRight size={20} />
+                  </>
+                )}
               </button>
             </form>
           )}

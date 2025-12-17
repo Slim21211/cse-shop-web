@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Home, Gift, ShoppingBag } from 'lucide-react';
@@ -23,12 +24,24 @@ export default function CatalogPageClient({
   const cartItems = useAppSelector(selectCartItems);
   const isMobile = useIsMobile();
 
+  // ✅ Оптимистичные обновления
+  const [optimisticCartIds, setOptimisticCartIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [isPending, startTransition] = useTransition();
+
   const { data: products, isLoading, error } = useGetProductsQuery(category);
 
   const categoryTitle =
     category === 'merch' ? 'Мерч компании' : 'Подарки отдела';
 
   const handleAddToCart = async (product: Product) => {
+    // ✅ МГНОВЕННО показываем, что товар добавлен
+    setOptimisticCartIds((prev) => new Set(prev).add(product.id));
+
+    // ✅ Сразу добавляем в Redux store (оптимистично)
+    dispatch(addToCart(product));
+
     try {
       const response = await fetch('/api/cart', {
         method: 'POST',
@@ -40,21 +53,48 @@ export default function CatalogPageClient({
       });
 
       if (response.status === 401) {
+        // Откатываем оптимистичное обновление
+        setOptimisticCartIds((prev) => {
+          const next = new Set(prev);
+          next.delete(product.id);
+          return next;
+        });
+
         router.push('/login?redirect=/catalog/' + category);
         return;
       }
 
-      if (response.ok) {
-        dispatch(addToCart(product));
-        router.refresh();
+      if (!response.ok) {
+        // Если ошибка - откатываем
+        setOptimisticCartIds((prev) => {
+          const next = new Set(prev);
+          next.delete(product.id);
+          return next;
+        });
+        console.error('Failed to add to cart');
       }
+
+      // ✅ Обновляем данные в фоне без перезагрузки страницы
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
+      // Откатываем при ошибке
+      setOptimisticCartIds((prev) => {
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      });
       console.error('Add to cart error:', error);
     }
   };
 
   const isInCart = (productId: number) => {
-    return cartItems.some((item) => item.product.id === productId);
+    // Проверяем как реальное состояние, так и оптимистичное
+    return (
+      optimisticCartIds.has(productId) ||
+      cartItems.some((item) => item.product.id === productId)
+    );
   };
 
   // Определяем кнопку навигации в зависимости от устройства и категории

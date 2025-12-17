@@ -287,3 +287,40 @@ img {
     color: black;
   }
 }
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Опциональные стили для улучшения UX кнопок */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button {
+  transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Плавный переход для оптимистичных обновлений */
+.optimistic-update {
+  transition: opacity 0.3s ease;
+}
