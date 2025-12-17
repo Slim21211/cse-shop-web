@@ -11,18 +11,24 @@ import {
   ArrowLeft,
   LogOut,
   Shield,
+  Loader2,
 } from 'lucide-react';
 import styles from './page.module.scss';
+
+interface OrderItem {
+  product_id?: number;
+  name: string;
+  quantity: number;
+  price: number;
+}
 
 interface Order {
   id: number;
   created_at: string;
   total_cost: number;
-  items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
+  items: OrderItem[];
+  user_name?: string;
+  email?: string;
 }
 
 interface UserData {
@@ -32,11 +38,63 @@ interface UserData {
   points: number;
 }
 
+// Тип для "сырых" данных заказа из API
+interface RawOrder {
+  id: number;
+  created_at: string;
+  total_cost: number;
+  items: unknown; // может быть чем угодно из БД
+  user_name?: string;
+  email?: string;
+}
+
+// Функция для склонения слова "заказ"
+function pluralizeOrders(count: number): string {
+  const cases = [2, 0, 1, 1, 1, 2];
+  const titles = ['заказ', 'заказа', 'заказов'];
+  return titles[
+    count % 100 > 4 && count % 100 < 20
+      ? 2
+      : cases[count % 10 < 5 ? count % 10 : 5]
+  ];
+}
+
+// Функция для склонения слова "балл"
+function pluralizePoints(count: number): string {
+  const cases = [2, 0, 1, 1, 1, 2];
+  const titles = ['балл', 'балла', 'баллов'];
+  return titles[
+    count % 100 > 4 && count % 100 < 20
+      ? 2
+      : cases[count % 10 < 5 ? count % 10 : 5]
+  ];
+}
+
+// Функция для проверки и нормализации items
+function normalizeOrderItems(items: unknown): OrderItem[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.filter(
+    (item): item is OrderItem =>
+      typeof item === 'object' &&
+      item !== null &&
+      'name' in item &&
+      typeof item.name === 'string' &&
+      'quantity' in item &&
+      typeof item.quantity === 'number' &&
+      'price' in item &&
+      typeof item.price === 'number'
+  );
+}
+
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -66,6 +124,8 @@ export default function AccountPage() {
       });
     } catch (error) {
       console.error('Failed to fetch user data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,12 +138,39 @@ export default function AccountPage() {
         return;
       }
 
+      if (!response.ok) {
+        console.error('Orders fetch failed:', response.status);
+        return;
+      }
+
       const data = await response.json();
-      setOrders(data.orders || []);
+      console.log('📦 Orders data:', data); // Для отладки
+
+      // Проверяем структуру данных
+      if (data.orders && Array.isArray(data.orders)) {
+        // Нормализуем данные заказов
+        const normalizedOrders = data.orders.map(
+          (order: RawOrder): Order => ({
+            id: order.id,
+            created_at: order.created_at,
+            total_cost: order.total_cost,
+            items: normalizeOrderItems(order.items),
+            user_name: order.user_name,
+            email: order.email,
+          })
+        );
+
+        console.log('✅ Normalized orders:', normalizedOrders);
+        setOrders(normalizedOrders);
+      } else {
+        console.error('Invalid orders structure:', data);
+        setOrders([]);
+      }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
+      setOrders([]);
     } finally {
-      setLoading(false);
+      setOrdersLoading(false);
     }
   };
 
@@ -100,8 +187,7 @@ export default function AccountPage() {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/');
-      router.refresh();
+      window.location.href = '/'; // Используем window.location для полной очистки
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -131,7 +217,10 @@ export default function AccountPage() {
     return (
       <div className={styles.page}>
         <div className="container">
-          <h1 className={styles.title}>Загрузка...</h1>
+          <div className={styles.loadingContainer}>
+            <Loader2 className="animate-spin" size={48} />
+            <h1 className={styles.title}>Загрузка...</h1>
+          </div>
         </div>
       </div>
     );
@@ -175,7 +264,9 @@ export default function AccountPage() {
                 <Award size={24} />
                 <div>
                   <div className={styles.statValue}>{user.points}</div>
-                  <div className={styles.statLabel}>баллов</div>
+                  <div className={styles.statLabel}>
+                    {pluralizePoints(user.points)}
+                  </div>
                 </div>
               </div>
 
@@ -184,11 +275,7 @@ export default function AccountPage() {
                 <div>
                   <div className={styles.statValue}>{orders.length}</div>
                   <div className={styles.statLabel}>
-                    {orders.length === 1
-                      ? 'заказ'
-                      : orders.length < 5
-                      ? 'заказа'
-                      : 'заказов'}
+                    {pluralizeOrders(orders.length)}
                   </div>
                 </div>
               </div>
@@ -212,7 +299,12 @@ export default function AccountPage() {
           <div className={styles.ordersSection}>
             <h2 className={styles.sectionTitle}>История заказов</h2>
 
-            {orders.length === 0 ? (
+            {ordersLoading ? (
+              <div className={styles.loadingOrders}>
+                <Loader2 className="animate-spin" size={32} />
+                <p>Загрузка заказов...</p>
+              </div>
+            ) : orders.length === 0 ? (
               <div className={styles.emptyOrders}>
                 <Package size={48} />
                 <p>У вас пока нет заказов</p>
@@ -232,22 +324,28 @@ export default function AccountPage() {
                         </div>
                       </div>
                       <div className={styles.orderTotal}>
-                        {order.total_cost} баллов
+                        {order.total_cost} {pluralizePoints(order.total_cost)}
                       </div>
                     </div>
 
-                    <div className={styles.orderItems}>
-                      {order.items.map((item, index) => (
-                        <div key={index} className={styles.orderItem}>
-                          <span className={styles.itemName}>
-                            {item.name} × {item.quantity}
-                          </span>
-                          <span className={styles.itemPrice}>
-                            {item.price} баллов
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    {order.items && order.items.length > 0 ? (
+                      <div className={styles.orderItems}>
+                        {order.items.map((item, index) => (
+                          <div key={index} className={styles.orderItem}>
+                            <span className={styles.itemName}>
+                              {item.name} × {item.quantity}
+                            </span>
+                            <span className={styles.itemPrice}>
+                              {item.price} {pluralizePoints(item.price)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.noItems}>
+                        <p>Товары не указаны</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

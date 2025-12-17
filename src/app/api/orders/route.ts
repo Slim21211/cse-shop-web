@@ -37,6 +37,7 @@ export async function GET() {
     const session = await getSession();
 
     if (!session) {
+      console.log('❌ No session found');
       return NextResponse.json(
         { error: 'Необходима авторизация' },
         { status: 401 }
@@ -45,10 +46,28 @@ export async function GET() {
 
     const supabase = await createClient();
 
+    // ✅ ИЗМЕНЕНИЕ: Сначала получаем email пользователя
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', session.userId)
+      .single();
+
+    if (userError || !userData) {
+      console.error('❌ User not found:', userError);
+      return NextResponse.json(
+        { error: 'Пользователь не найден' },
+        { status: 404 }
+      );
+    }
+
+    console.log('✅ Fetching orders for email:', userData.email);
+
+    // ✅ ИЗМЕНЕНИЕ: Ищем заказы по email вместо user_id
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('*')
-      .eq('user_id', session.userId)
+      .select('id, created_at, total_cost, items, user_name, email')
+      .eq('email', userData.email)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -59,7 +78,22 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ orders: orders || [] });
+    console.log('✅ Orders fetched:', {
+      count: orders?.length || 0,
+      email: userData.email,
+    });
+
+    // Нормализуем данные перед отправкой
+    const normalizedOrders = (orders || []).map((order) => ({
+      id: order.id,
+      created_at: order.created_at,
+      total_cost: order.total_cost,
+      items: Array.isArray(order.items) ? order.items : [],
+      user_name: order.user_name,
+      email: order.email,
+    }));
+
+    return NextResponse.json({ orders: normalizedOrders });
   } catch (error) {
     console.error('❌ Orders GET error:', error);
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });
@@ -147,14 +181,20 @@ export async function POST() {
       };
     });
 
-    // Сохраняем заказ
-    const { error: orderError } = await supabase.from('orders').insert({
-      user_id: session.userId,
-      user_name: `${userData.first_name} ${userData.last_name}`,
-      email: userData.email,
-      items: orderItems,
-      total_cost: totalCost,
-    });
+    console.log('📦 Creating order with items:', orderItems);
+
+    // Сохраняем заказ (user_id все еще сохраняется для новых заказов)
+    const { data: newOrder, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        user_id: session.userId,
+        user_name: `${userData.first_name} ${userData.last_name}`,
+        email: userData.email,
+        items: orderItems,
+        total_cost: totalCost,
+      })
+      .select()
+      .single();
 
     if (orderError) {
       console.error('❌ Order creation error:', orderError);
@@ -163,6 +203,8 @@ export async function POST() {
         { status: 500 }
       );
     }
+
+    console.log('✅ Order created:', newOrder);
 
     // Списываем баллы
     const withdrawSuccess = await withdrawPoints(
