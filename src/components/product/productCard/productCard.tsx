@@ -95,8 +95,6 @@ export function ProductCard({
           <p className={styles.description}>{product.description}</p>
         )}
 
-        {product.size && <p className={styles.size}>Размер: {product.size}</p>}
-
         <div className={styles.footer}>
           <div className={styles.priceInfo}>
             <span className={styles.price}>{product.price}</span>
