@@ -27,7 +27,7 @@ export function ImageCarousel({
         <div className={styles.imageWrapper}>
           {discountBadge}
           <Image
-            src="/placeholder.jpg"
+            src="/placeholder.png"
             alt={alt}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

@@ -17,8 +17,21 @@ interface CartItem {
     name: string;
     price: number;
     image_url: string | null;
+    image_urls?: string[] | null;
     remains: number;
   };
+}
+
+// Функция для получения первого изображения товара
+function getProductImage(product: CartItem['products']): string {
+  // Приоритет: первое из image_urls -> image_url -> placeholder
+  if (product.image_urls && product.image_urls.length > 0) {
+    return product.image_urls[0];
+  }
+  if (product.image_url) {
+    return product.image_url;
+  }
+  return '/placeholder.png';
 }
 
 export default function CartPage() {
@@ -208,7 +221,7 @@ export default function CartPage() {
               <div key={item.id} className={styles.cartItem}>
                 <div className={styles.itemImage}>
                   <Image
-                    src={item.products.image_url || '/placeholder.jpg'}
+                    src={getProductImage(item.products)}
                     alt={item.products.name}
                     fill
                     sizes="120px"
