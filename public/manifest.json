@@ -4,8 +4,8 @@
   "description": "Обменивайте баллы на фирменный мерч и подарки компании КСЭ",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1976d2",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {

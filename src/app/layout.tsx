@@ -178,6 +178,18 @@ export default async function RootLayout({
   return (
     <html lang="ru" data-theme={ssrTheme} suppressHydrationWarning>
       <head>
+        {/* ✅ Цвет статус-бара и UI браузера */}
+        <meta
+          name="theme-color"
+          content="#000000"
+          media="(prefers-color-scheme: dark)"
+        />
+        <meta
+          name="theme-color"
+          content="#000000"
+          media="(prefers-color-scheme: light)"
+        />
+
         {/* ✅ Дополнительные метатеги для форсирования обновления */}
         <meta httpEquiv="cache-control" content="no-cache" />
         <meta httpEquiv="expires" content="0" />
