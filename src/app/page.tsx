@@ -36,6 +36,15 @@ export default async function HomePage() {
           <p className={styles.heroSubtitle}>
             Обменивайте заработанные баллы на фирменный мерч и подарки
           </p>
+
+          {/* ✨ УТП со стикерпаком */}
+          <div className={styles.heroBadge}>
+            <span className={styles.badgeIcon}>🎁</span>
+            <span className={styles.badgeText}>
+              При первом заказе мерча — стикерпак в подарок
+            </span>
+          </div>
+
           <div className={styles.heroActions}>
             <Link href="/catalog/merch" className={styles.primaryButton}>
               Посмотреть каталог
