@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Loader2 } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
 import styles from './productCard.module.scss';
 import { ImageCarousel } from '@/components/imageCarousel/imageCarousel';
@@ -26,7 +26,6 @@ function pluralizePoints(count: number): string {
 
 // Функция для получения массива изображений
 function getProductImages(product: Product): string[] {
-  // Приоритет: image_urls -> image_url -> пустой массив
   if (product.image_urls && product.image_urls.length > 0) {
     return product.image_urls;
   }
@@ -41,26 +40,58 @@ export function ProductCard({
   onAddToCart,
   isInCart,
 }: ProductCardProps) {
-  const [isAdding, setIsAdding] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
   const isOutOfStock = product.remains === 0;
   const hasDiscount = !!product.old_price && product.old_price > product.price;
   const images = getProductImages(product);
 
-  const handleAddToCart = async () => {
-    if (!onAddToCart || isInCart || isAdding) return;
+  // Проверяем, обрезан ли текст (если длиннее ~100 символов)
+  const isDescriptionTruncated =
+    product.description && product.description.length > 100;
 
-    setIsAdding(true);
-    try {
-      await onAddToCart(product);
-    } finally {
-      // Небольшая задержка для визуальной обратной связи
-      setTimeout(() => setIsAdding(false), 300);
+  // Закрываем тултип при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+
+      if (
+        tooltipRef.current &&
+        wrapperRef.current &&
+        !wrapperRef.current.contains(target)
+      ) {
+        setShowTooltip(false);
+      }
+    };
+
+    if (showTooltip) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showTooltip]);
+
+  const handleDescriptionClick = (e: React.MouseEvent | React.TouchEvent) => {
+    if (isDescriptionTruncated) {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowTooltip(!showTooltip);
     }
   };
 
   return (
     <div className={styles.card}>
-      <Link href="" className={styles.carouselLink}>
+      <Link
+        href=""
+        className={styles.carouselLink}
+        onClick={(e) => e.preventDefault()}
+      >
         <ImageCarousel
           images={images}
           alt={product.name}
@@ -87,12 +118,48 @@ export function ProductCard({
       </Link>
 
       <div className={styles.content}>
-        <Link href="" className={styles.name}>
+        <Link
+          href=""
+          className={styles.name}
+          onClick={(e) => e.preventDefault()}
+        >
           {product.name}
         </Link>
 
+        {/* ✨ Описание с тултипом для десктопа и мобильных */}
         {product.description && (
-          <p className={styles.description}>{product.description}</p>
+          <div
+            ref={wrapperRef}
+            className={styles.descriptionWrapper}
+            onMouseEnter={() => isDescriptionTruncated && setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+            onClick={handleDescriptionClick}
+            onTouchEnd={handleDescriptionClick}
+          >
+            <p
+              className={`${styles.description} ${
+                isDescriptionTruncated ? styles.clickable : ''
+              }`}
+            >
+              {product.description}
+            </p>
+
+            {/* Тултип показывается только если текст обрезан */}
+            {showTooltip && isDescriptionTruncated && (
+              <div ref={tooltipRef} className={styles.tooltip}>
+                {product.description}
+                <button
+                  className={styles.tooltipClose}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowTooltip(false);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         <div className={styles.footer}>
@@ -108,26 +175,14 @@ export function ProductCard({
 
           {!isOutOfStock && (
             <button
-              onClick={handleAddToCart}
+              onClick={() => onAddToCart?.(product)}
               className={`${styles.cartButton} ${
                 isInCart ? styles.inCart : ''
-              } ${isAdding ? styles.adding : ''}`}
-              disabled={isInCart || isAdding}
+              }`}
+              disabled={isInCart}
             >
-              {isAdding ? (
-                <>
-                  <Loader2 className="animate-spin" size={18} />
-                  Добавление...
-                </>
-              ) : isInCart ? (
-                <>
-                  <ShoppingCart size={18} />В корзине
-                </>
-              ) : (
-                <>
-                  <ShoppingCart size={18} />В корзину
-                </>
-              )}
+              <ShoppingCart size={18} />
+              {isInCart ? 'В корзине' : 'В корзину'}
             </button>
           )}
         </div>
