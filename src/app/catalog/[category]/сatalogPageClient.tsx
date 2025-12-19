@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Home, Gift, ShoppingBag } from 'lucide-react';
@@ -24,24 +23,12 @@ export default function CatalogPageClient({
   const cartItems = useAppSelector(selectCartItems);
   const isMobile = useIsMobile();
 
-  // ✅ Оптимистичные обновления
-  const [optimisticCartIds, setOptimisticCartIds] = useState<Set<number>>(
-    new Set()
-  );
-  const [isPending, startTransition] = useTransition();
-
   const { data: products, isLoading, error } = useGetProductsQuery(category);
 
   const categoryTitle =
     category === 'merch' ? 'Мерч компании' : 'Подарки отдела';
 
   const handleAddToCart = async (product: Product) => {
-    // ✅ МГНОВЕННО показываем, что товар добавлен
-    setOptimisticCartIds((prev) => new Set(prev).add(product.id));
-
-    // ✅ Сразу добавляем в Redux store (оптимистично)
-    dispatch(addToCart(product));
-
     try {
       const response = await fetch('/api/cart', {
         method: 'POST',
@@ -53,49 +40,41 @@ export default function CatalogPageClient({
       });
 
       if (response.status === 401) {
-        // Откатываем оптимистичное обновление
-        setOptimisticCartIds((prev) => {
-          const next = new Set(prev);
-          next.delete(product.id);
-          return next;
-        });
-
         router.push('/login?redirect=/catalog/' + category);
         return;
       }
 
-      if (!response.ok) {
-        // Если ошибка - откатываем
-        setOptimisticCartIds((prev) => {
-          const next = new Set(prev);
-          next.delete(product.id);
-          return next;
-        });
-        console.error('Failed to add to cart');
-      }
-
-      // ✅ Обновляем данные в фоне без перезагрузки страницы
-      startTransition(() => {
+      if (response.ok) {
+        dispatch(addToCart(product));
         router.refresh();
-      });
+      }
     } catch (error) {
-      // Откатываем при ошибке
-      setOptimisticCartIds((prev) => {
-        const next = new Set(prev);
-        next.delete(product.id);
-        return next;
-      });
       console.error('Add to cart error:', error);
     }
   };
 
   const isInCart = (productId: number) => {
-    // Проверяем как реальное состояние, так и оптимистичное
-    return (
-      optimisticCartIds.has(productId) ||
-      cartItems.some((item) => item.product.id === productId)
-    );
+    return cartItems.some((item) => item.product.id === productId);
   };
+
+  // ✅ Сортировка товаров
+  const sortProducts = (products: Product[]): Product[] => {
+    return [...products].sort((a, b) => {
+      // 1️⃣ Сначала товары в наличии (remains > 0)
+      const aInStock = a.remains > 0 ? 1 : 0;
+      const bInStock = b.remains > 0 ? 1 : 0;
+
+      if (aInStock !== bInStock) {
+        return bInStock - aInStock; // В наличии выше
+      }
+
+      // 2️⃣ Потом по цене (от меньшей к большей)
+      return a.price - b.price;
+    });
+  };
+
+  // Применяем сортировку к товарам
+  const sortedProducts = products ? sortProducts(products) : [];
 
   // Определяем кнопку навигации в зависимости от устройства и категории
   const renderNavigationButton = () => {
@@ -129,7 +108,6 @@ export default function CatalogPageClient({
     return (
       <div className={styles.page}>
         <div className="container">
-          <h1 className={styles.title}>Загрузка...</h1>
           <div className={styles.grid}>
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="skeleton" style={{ height: 400 }} />
@@ -159,18 +137,18 @@ export default function CatalogPageClient({
         <div className={styles.header}>
           <h1 className={styles.title}>{categoryTitle}</h1>
           <p className={styles.count}>
-            {products?.length || 0}{' '}
-            {products?.length === 1 ? 'товар' : 'товаров'}
+            {sortedProducts?.length || 0}{' '}
+            {sortedProducts?.length === 1 ? 'товар' : 'товаров'}
           </p>
         </div>
 
-        {!products || products.length === 0 ? (
+        {!sortedProducts || sortedProducts.length === 0 ? (
           <div className={styles.empty}>
             <p>В этой категории пока нет товаров</p>
           </div>
         ) : (
           <div className={styles.grid}>
-            {products.map((product) => (
+            {sortedProducts.map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}

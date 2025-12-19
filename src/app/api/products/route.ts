@@ -46,16 +46,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Проверяем результат
-    console.log(
-      `✅ Returned ${data?.length || 0} products for category: ${category}`
-    );
-    if (data && data.length > 0) {
-      console.log('First product is_gift:', data[0].is_gift);
-      console.log('Last product is_gift:', data[data.length - 1].is_gift);
-    }
+    // ✅ Сортировка товаров перед возвратом
+    const sortedData = data
+      ? [...data].sort((a, b) => {
+          // 1️⃣ Сначала товары в наличии (remains > 0)
+          const aInStock = a.remains > 0 ? 1 : 0;
+          const bInStock = b.remains > 0 ? 1 : 0;
 
-    return NextResponse.json({ products: data });
+          if (aInStock !== bInStock) {
+            return bInStock - aInStock; // В наличии выше
+          }
+
+          // 2️⃣ Потом по цене (от меньшей к большей)
+          return a.price - b.price;
+        })
+      : [];
+
+    return NextResponse.json({ products: sortedData });
   } catch (error) {
     console.error('Products error:', error);
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });
