@@ -15,7 +15,12 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000'],
+      allowedOrigins: [
+        'localhost:3000',
+        'cse-shop.ru',
+        'www.cse-shop.ru',
+        'cse-shop-web.vercel.app',
+      ],
     },
   },
 };
