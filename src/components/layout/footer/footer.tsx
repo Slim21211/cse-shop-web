@@ -28,10 +28,6 @@ export function Footer() {
           <div className={styles.section}>
             <h4 className={styles.subtitle}>Контакты</h4>
             <div className={styles.contacts}>
-              <a href="mailto:giftshop@cse.ru" className={styles.contact}>
-                <Mail size={18} />
-                giftshop@cse.ru
-              </a>
               <div className={styles.contact}>
                 <MapPin size={18} />
                 Москва, Россия
