@@ -1,8 +1,5 @@
-// app/api/auth/check-email/route.ts
-
-import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { getISpringUsers, warmUsersCache } from '@/lib/ispring/api';
+import { findISpringUserByEmail } from '@/lib/ispring/api';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,33 +11,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Checking email:', email);
 
-    // Читаем только из кэша — никакого обращения в iSpring в этом запросе
-    const users = await getISpringUsers();
-
-    if (users === null) {
-      // Кэш холодный. Запускаем прогрев в фоне через after() —
-      // after() выполняется после отправки ответа, Lambda остаётся живой.
-      // Следующая попытка логина (через ~30-120 секунд) попадёт в тёплый кэш.
-      console.log('🔥 Cache cold — triggering background warm via after()');
-      after(warmUsersCache);
-
-      return NextResponse.json(
-        {
-          error:
-            'Система инициализируется. Пожалуйста, попробуйте войти через 30 секунд.',
-          retryable: true,
-        },
-        { status: 503 }
-      );
-    }
-
-    // Ищем пользователя по email (без учёта регистра)
-    const user = users.find((u) => {
-      const fields = Array.isArray(u.fields) ? u.fields : [u.fields];
-      const emailField = fields.find((f) => f?.name === 'EMAIL');
-      const userEmail = emailField?.value;
-      return userEmail?.toLowerCase() === email.toLowerCase();
-    });
+    const user = await findISpringUserByEmail(email);
 
     if (!user) {
       console.log('User not found for email:', email);

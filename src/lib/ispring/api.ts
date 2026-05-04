@@ -1,7 +1,3 @@
-// lib/ispring/api.ts
-
-import { createClient } from '@/lib/supabase/server';
-
 interface ISpringTokenResponse {
   access_token: string;
   expires_in: number;
@@ -23,48 +19,6 @@ interface ISpringUsersResponse {
 }
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
-let memUsersCache: { users: ISpringUser[]; expiresAt: number } | null = null;
-
-const USERS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 час
-const WARM_FETCH_TIMEOUT_MS = 120_000;       // 120 секунд — для фонового прогрева
-const FAST_FETCH_TIMEOUT_MS = 8_000;         // 8 секунд — для токена и points
-
-// Таймаут покрывает и fetch() (заголовки) и response.json() (тело ответа).
-// clearTimeout вызывается только в finally — после того как всё прочитано.
-async function fetchJSONWithTimeout<T>(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number
-): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`HTTP ${response.status}: ${text}`);
-    }
-    return await response.json() as T;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function fetchTextWithTimeout(
-  url: string,
-  options: RequestInit,
-  timeoutMs = FAST_FETCH_TIMEOUT_MS
-): Promise<{ ok: boolean; status: number; text: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    const text = await response.text();
-    return { ok: response.ok, status: response.status, text };
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export async function getISpringToken(): Promise<string> {
   const now = Date.now();
@@ -92,15 +46,24 @@ export async function getISpringToken(): Promise<string> {
     client_secret: process.env.ISPRING_CLIENT_SECRET,
   });
 
-  const data = await fetchJSONWithTimeout<ISpringTokenResponse>(url, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     },
     body: body.toString(),
-  }, FAST_FETCH_TIMEOUT_MS);
+  });
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ iSpring token error response:', errorText);
+    throw new Error(
+      `Failed to get iSpring token (${response.status}): ${errorText}`
+    );
+  }
+
+  const data: ISpringTokenResponse = await response.json();
   console.log('✅ Successfully got iSpring token');
 
   tokenCache = {
@@ -111,153 +74,85 @@ export async function getISpringToken(): Promise<string> {
   return data.access_token;
 }
 
-async function loadUsersFromSupabase(): Promise<ISpringUser[] | null> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('ispring_cache')
-      .select('data, updated_at')
-      .eq('key', 'users')
-      .maybeSingle();
+// Ищет одного пользователя по email через фильтр на стороне iSpring.
+// Возвращает null если не найден.
+export async function findISpringUserByEmail(
+  email: string
+): Promise<ISpringUser | null> {
+  const token = await getISpringToken();
 
-    if (error) {
-      console.error('❌ Supabase cache read error:', error);
-      return null;
+  console.log(`🔍 Looking up iSpring user by email: ${email}`);
+
+  const response = await fetch(
+    `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        page: 1,
+        pageSize: 1,
+        emails: [email.toLowerCase()],
+      }),
     }
+  );
 
-    if (!data) {
-      console.log('📭 No users cache in Supabase');
-      return null;
-    }
-
-    const age = Date.now() - new Date(data.updated_at).getTime();
-    if (age > USERS_CACHE_TTL_MS) {
-      console.log(`⏰ Supabase cache expired (${Math.round(age / 1000)}s old)`);
-      return null;
-    }
-
-    const users = data.data as ISpringUser[];
-    console.log(`✅ Loaded ${users.length} users from Supabase cache`);
-    return users;
-  } catch (err) {
-    console.error('❌ Error reading Supabase cache:', err);
-    return null;
-  }
-}
-
-async function saveUsersToSupabase(users: ISpringUser[]): Promise<void> {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from('ispring_cache')
-      .upsert({ key: 'users', data: users, updated_at: new Date().toISOString() });
-
-    if (error) {
-      console.error('❌ Error saving to Supabase cache:', error);
-    } else {
-      console.log(`💾 Saved ${users.length} users to Supabase cache`);
-    }
-  } catch (err) {
-    console.error('❌ Exception saving to Supabase cache:', err);
-  }
-}
-
-// Читает только из кэша. Никогда не идёт в iSpring.
-// Возвращает null если кэш холодный — caller должен это обработать.
-export async function getISpringUsers(): Promise<ISpringUser[] | null> {
-  const now = Date.now();
-
-  if (memUsersCache && memUsersCache.expiresAt > now) {
-    console.log(`✅ Using in-memory users cache (${memUsersCache.users.length})`);
-    return memUsersCache.users;
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ iSpring user lookup error:', errorText);
+    throw new Error(
+      `Failed to fetch iSpring user (${response.status}): ${errorText}`
+    );
   }
 
-  const cachedUsers = await loadUsersFromSupabase();
-  if (cachedUsers) {
-    memUsersCache = { users: cachedUsers, expiresAt: now + USERS_CACHE_TTL_MS };
-    return cachedUsers;
-  }
+  const data: ISpringUsersResponse = await response.json();
 
-  return null;
-}
+  if (!data.userProfiles) return null;
 
-// Тяжёлый запрос в iSpring — вызывается из after() в фоне, не блокирует пользователя.
-// Таймаут 120 секунд — достаточно для медленного ответа iSpring.
-export async function warmUsersCache(): Promise<void> {
-  console.log('🔥 Warming users cache from iSpring...');
+  const user = Array.isArray(data.userProfiles)
+    ? data.userProfiles[0]
+    : data.userProfiles;
 
-  try {
-    const token = await getISpringToken();
-    const allUsers: ISpringUser[] = [];
-    let pageNumber = 1;
-    const pageSize = 1000;
+  if (!user) return null;
 
-    while (true) {
-      console.log(`Fetching page ${pageNumber}...`);
-
-      const data = await fetchJSONWithTimeout<ISpringUsersResponse>(
-        `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ page: pageNumber, pageSize }),
-        },
-        WARM_FETCH_TIMEOUT_MS
-      );
-
-      let users: ISpringUser[];
-      if (Array.isArray(data.userProfiles)) {
-        users = data.userProfiles;
-      } else if (data.userProfiles) {
-        users = [data.userProfiles];
-      } else {
-        users = [];
-      }
-
-      allUsers.push(...users);
-      console.log(`✅ Fetched ${users.length} users, total: ${allUsers.length}`);
-
-      if (users.length < pageSize) break;
-      pageNumber++;
-    }
-
-    memUsersCache = { users: allUsers, expiresAt: Date.now() + USERS_CACHE_TTL_MS };
-    await saveUsersToSupabase(allUsers);
-    console.log('🔥 Cache warmed successfully');
-  } catch (err) {
-    console.error('❌ warmUsersCache failed:', err);
-  }
+  console.log(`✅ Found iSpring user: ${user.userId}`);
+  return user;
 }
 
 export async function getUserPoints(userId: string): Promise<number> {
   try {
     const token = await getISpringToken();
+
     console.log('💰 Getting points for user:', userId);
 
-    const { ok, status, text } = await fetchTextWithTimeout(
+    const response = await fetch(
       `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
       {
         headers: {
-          Authorization: token,
+          Authorization: token, // Без "Bearer"!
           Accept: 'application/xml',
         },
       }
     );
 
-    console.log('Points response status:', status);
+    console.log('Points response status:', response.status);
 
-    if (!ok) {
-      console.error('❌ Failed to get user points:', text);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to get user points:', errorText);
       return 0;
     }
 
-    console.log('Points XML response (first 200 chars):', text.substring(0, 200));
+    const xml = await response.text();
+    console.log(
+      'Points XML response (first 200 chars):',
+      xml.substring(0, 200)
+    );
 
-    const pointsMatch = text.match(/<points>(\d+)<\/points>/);
+    const pointsMatch = xml.match(/<points>(\d+)<\/points>/);
     const points = pointsMatch ? parseInt(pointsMatch[1], 10) : 0;
 
     console.log('✅ User points:', points);
@@ -285,12 +180,12 @@ export async function withdrawPoints(
 
     console.log('💸 Withdrawing points:', { userId, amount, reason });
 
-    const { ok, status, text } = await fetchTextWithTimeout(
+    const response = await fetch(
       `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points/withdraw`,
       {
         method: 'POST',
         headers: {
-          Authorization: token,
+          Authorization: token, // Без "Bearer"!
           'Content-Type': 'application/xml',
           Accept: 'application/xml',
         },
@@ -298,10 +193,11 @@ export async function withdrawPoints(
       }
     );
 
-    console.log('Withdraw response status:', status);
+    console.log('Withdraw response status:', response.status);
 
-    if (!ok) {
-      console.error('❌ Failed to withdraw points:', text);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to withdraw points:', errorText);
       return false;
     }
 

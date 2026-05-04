@@ -1,14 +1,7 @@
-// app/api/test-ispring/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getISpringToken, findISpringUserByEmail } from '@/lib/ispring/api';
 
-import { after } from 'next/server';
-import { NextResponse } from 'next/server';
-import {
-  getISpringToken,
-  getISpringUsers,
-  warmUsersCache,
-} from '@/lib/ispring/api';
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     console.log('=== Testing iSpring API ===');
 
@@ -26,31 +19,18 @@ export async function GET() {
     const token = await getISpringToken();
     console.log('✅ Token received:', token.substring(0, 20) + '...');
 
-    const users = await getISpringUsers();
-
-    if (users === null) {
-      console.log('📭 Cache cold — triggering background warm');
-      after(warmUsersCache);
-
-      return NextResponse.json({
-        success: true,
-        env,
-        tokenLength: token.length,
-        usersCount: null,
-        message: 'Cache cold — warming in background, retry in ~60 seconds',
-      });
-    }
-
-    console.log('✅ Users received:', users.length);
+    // Тестируем поиск по email (подставь реальный адрес через ?email=...)
+    const testEmail =
+      request.nextUrl.searchParams.get('email') || 'test@cse.ru';
+    const user = await findISpringUserByEmail(testEmail);
 
     return NextResponse.json({
       success: true,
       env,
       tokenLength: token.length,
-      usersCount: users.length,
-      firstUser: users[0]
-        ? { userId: users[0].userId, hasFields: !!users[0].fields }
-        : null,
+      searchedEmail: testEmail,
+      userFound: !!user,
+      user: user ? { userId: user.userId, hasFields: !!user.fields } : null,
     });
   } catch (error) {
     console.error('❌ Test failed:', error);
