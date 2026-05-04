@@ -1,5 +1,3 @@
-// lib/ispring/api.ts
-
 interface ISpringTokenResponse {
   access_token: string;
   expires_in: number;
@@ -21,6 +19,9 @@ interface ISpringUsersResponse {
 }
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
+let usersCache: { users: ISpringUser[]; expiresAt: number } | null = null;
+
+const USERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
 
 export async function getISpringToken(): Promise<string> {
   const now = Date.now();
@@ -82,6 +83,13 @@ export async function getISpringToken(): Promise<string> {
 }
 
 export async function getISpringUsers(): Promise<ISpringUser[]> {
+  const now = Date.now();
+
+  if (usersCache && usersCache.expiresAt > now) {
+    console.log(`✅ Using cached iSpring users (${usersCache.users.length})`);
+    return usersCache.users;
+  }
+
   const token = await getISpringToken();
   const allUsers: ISpringUser[] = [];
   let pageNumber = 1;
@@ -130,6 +138,11 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
     if (users.length < pageSize) break;
     pageNumber++;
   }
+
+  usersCache = { users: allUsers, expiresAt: now + USERS_CACHE_TTL_MS };
+  console.log(
+    `💾 iSpring users cached until ${new Date(usersCache.expiresAt).toISOString()}`
+  );
 
   return allUsers;
 }
