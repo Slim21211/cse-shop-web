@@ -1,3 +1,7 @@
+// lib/ispring/api.ts
+
+import { createClient } from '@/lib/supabase/server';
+
 interface ISpringTokenResponse {
   access_token: string;
   expires_in: number;
@@ -18,10 +22,29 @@ interface ISpringUsersResponse {
   totalUsersNumber: number;
 }
 
+// Кэш токена — в памяти Lambda достаточно
 let tokenCache: { token: string; expiresAt: number } | null = null;
-let usersCache: { users: ISpringUser[]; expiresAt: number } | null = null;
 
-const USERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
+// Кэш юзеров — в памяти как быстрый слой поверх Supabase
+let memUsersCache: { users: ISpringUser[]; expiresAt: number } | null = null;
+
+const USERS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 минут
+const ISPRING_FETCH_TIMEOUT_MS = 8000; // 8 секунд на каждый запрос
+
+// Обёртка над fetch с AbortController — больше не зависаем на 70 секунд
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = ISPRING_FETCH_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function getISpringToken(): Promise<string> {
   const now = Date.now();
@@ -49,47 +72,85 @@ export async function getISpringToken(): Promise<string> {
     client_secret: process.env.ISPRING_CLIENT_SECRET,
   });
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: body.toString(),
-    });
+  const response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: body.toString(),
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ iSpring token error response:', errorText);
-      throw new Error(
-        `Failed to get iSpring token (${response.status}): ${errorText}`
-      );
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ iSpring token error response:', errorText);
+    throw new Error(
+      `Failed to get iSpring token (${response.status}): ${errorText}`
+    );
+  }
+
+  const data: ISpringTokenResponse = await response.json();
+  console.log('✅ Successfully got iSpring token');
+
+  tokenCache = {
+    token: data.access_token,
+    expiresAt: now + (data.expires_in - 60) * 1000,
+  };
+
+  return data.access_token;
+}
+
+async function loadUsersFromSupabase(): Promise<ISpringUser[] | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('ispring_cache')
+      .select('data, updated_at')
+      .eq('key', 'users')
+      .single();
+
+    if (error || !data) {
+      console.log('📭 No users cache in Supabase');
+      return null;
     }
 
-    const data: ISpringTokenResponse = await response.json();
-    console.log('✅ Successfully got iSpring token');
+    const age = Date.now() - new Date(data.updated_at).getTime();
+    if (age > USERS_CACHE_TTL_MS) {
+      console.log(`⏰ Supabase cache expired (${Math.round(age / 1000)}s old)`);
+      return null;
+    }
 
-    tokenCache = {
-      token: data.access_token,
-      expiresAt: now + (data.expires_in - 60) * 1000,
-    };
-
-    return data.access_token;
-  } catch (error) {
-    console.error('❌ Exception while getting iSpring token:', error);
-    throw error;
+    const users = data.data as ISpringUser[];
+    console.log(`✅ Loaded ${users.length} users from Supabase cache`);
+    return users;
+  } catch (err) {
+    console.error('❌ Error reading Supabase cache:', err);
+    return null;
   }
 }
 
-export async function getISpringUsers(): Promise<ISpringUser[]> {
-  const now = Date.now();
+async function saveUsersToSupabase(users: ISpringUser[]): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('ispring_cache')
+      .upsert({
+        key: 'users',
+        data: users,
+        updated_at: new Date().toISOString(),
+      });
 
-  if (usersCache && usersCache.expiresAt > now) {
-    console.log(`✅ Using cached iSpring users (${usersCache.users.length})`);
-    return usersCache.users;
+    if (error) {
+      console.error('❌ Error saving to Supabase cache:', error);
+    } else {
+      console.log(`💾 Saved ${users.length} users to Supabase cache`);
+    }
+  } catch (err) {
+    console.error('❌ Exception saving to Supabase cache:', err);
   }
+}
 
+async function fetchAllUsersFromISpring(): Promise<ISpringUser[]> {
   const token = await getISpringToken();
   const allUsers: ISpringUser[] = [];
   let pageNumber = 1;
@@ -100,7 +161,7 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
   while (true) {
     console.log(`Fetching page ${pageNumber}...`);
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
       {
         method: 'POST',
@@ -139,12 +200,36 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
     pageNumber++;
   }
 
-  usersCache = { users: allUsers, expiresAt: now + USERS_CACHE_TTL_MS };
-  console.log(
-    `💾 iSpring users cached until ${new Date(usersCache.expiresAt).toISOString()}`
-  );
-
   return allUsers;
+}
+
+export async function getISpringUsers(): Promise<ISpringUser[]> {
+  const now = Date.now();
+
+  // 1. Проверяем кэш в памяти Lambda (самый быстрый)
+  if (memUsersCache && memUsersCache.expiresAt > now) {
+    console.log(
+      `✅ Using in-memory users cache (${memUsersCache.users.length})`
+    );
+    return memUsersCache.users;
+  }
+
+  // 2. Проверяем кэш в Supabase (быстро ~100ms, переживёт cold start)
+  const cachedUsers = await loadUsersFromSupabase();
+  if (cachedUsers) {
+    memUsersCache = { users: cachedUsers, expiresAt: now + USERS_CACHE_TTL_MS };
+    return cachedUsers;
+  }
+
+  // 3. Идём в iSpring (медленно, только если оба кэша пустые/устаревшие)
+  console.log('🌐 Fetching fresh users from iSpring...');
+  const users = await fetchAllUsersFromISpring();
+
+  // Сохраняем в оба кэша
+  memUsersCache = { users, expiresAt: now + USERS_CACHE_TTL_MS };
+  await saveUsersToSupabase(users);
+
+  return users;
 }
 
 export async function getUserPoints(userId: string): Promise<number> {
@@ -153,11 +238,7 @@ export async function getUserPoints(userId: string): Promise<number> {
 
     console.log('💰 Getting points for user:', userId);
 
-    // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
-    // 1. Используем правильный домен (как в боте)
-    // 2. Токен БЕЗ префикса "Bearer"
-    // 3. Accept: application/xml
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
       {
         headers: {
@@ -181,7 +262,6 @@ export async function getUserPoints(userId: string): Promise<number> {
       xml.substring(0, 200)
     );
 
-    // Парсим XML ответ
     const pointsMatch = xml.match(/<points>(\d+)<\/points>/);
     const points = pointsMatch ? parseInt(pointsMatch[1], 10) : 0;
 
@@ -210,7 +290,7 @@ export async function withdrawPoints(
 
     console.log('💸 Withdrawing points:', { userId, amount, reason });
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points/withdraw`,
       {
         method: 'POST',
