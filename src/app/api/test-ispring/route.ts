@@ -1,11 +1,17 @@
+// app/api/test-ispring/route.ts
+
+import { after } from 'next/server';
 import { NextResponse } from 'next/server';
-import { getISpringToken, getISpringUsers } from '@/lib/ispring/api';
+import {
+  getISpringToken,
+  getISpringUsers,
+  warmUsersCache,
+} from '@/lib/ispring/api';
 
 export async function GET() {
   try {
     console.log('=== Testing iSpring API ===');
 
-    // Проверяем переменные окружения
     const env = {
       ISPRING_DOMAIN: process.env.ISPRING_DOMAIN,
       ISPRING_CLIENT_ID: process.env.ISPRING_CLIENT_ID,
@@ -17,24 +23,33 @@ export async function GET() {
 
     console.log('Environment variables:', env);
 
-    // Пробуем получить токен
     const token = await getISpringToken();
     console.log('✅ Token received:', token.substring(0, 20) + '...');
 
-    // Пробуем получить пользователей
     const users = await getISpringUsers();
+
+    if (users === null) {
+      console.log('📭 Cache cold — triggering background warm');
+      after(warmUsersCache);
+
+      return NextResponse.json({
+        success: true,
+        env,
+        tokenLength: token.length,
+        usersCount: null,
+        message: 'Cache cold — warming in background, retry in ~60 seconds',
+      });
+    }
+
     console.log('✅ Users received:', users.length);
 
     return NextResponse.json({
       success: true,
-      env: env,
+      env,
       tokenLength: token.length,
       usersCount: users.length,
       firstUser: users[0]
-        ? {
-            userId: users[0].userId,
-            hasFields: !!users[0].fields,
-          }
+        ? { userId: users[0].userId, hasFields: !!users[0].fields }
         : null,
     });
   } catch (error) {
