@@ -22,53 +22,43 @@ interface ISpringUsersResponse {
   totalUsersNumber: number;
 }
 
-// Кэш токена — в памяти Lambda достаточно
 let tokenCache: { token: string; expiresAt: number } | null = null;
-
-// Кэш юзеров — в памяти как быстрый слой поверх Supabase
 let memUsersCache: { users: ISpringUser[]; expiresAt: number } | null = null;
 
-const USERS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 минут
-const ISPRING_FETCH_TIMEOUT_MS = 8000; // 8 секунд
+const USERS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 час
+const WARM_FETCH_TIMEOUT_MS = 120_000;       // 120 секунд — для фонового прогрева
+const FAST_FETCH_TIMEOUT_MS = 8_000;         // 8 секунд — для токена и points
 
-// Важно: таймаут покрывает и fetch() (заголовки) и response.json() (тело).
-// Предыдущая версия очищала таймер после получения заголовков,
-// из-за чего тело читалось без ограничений — 71 секунда вместо 8.
+// Таймаут покрывает и fetch() (заголовки) и response.json() (тело ответа).
+// clearTimeout вызывается только в finally — после того как всё прочитано.
 async function fetchJSONWithTimeout<T>(
   url: string,
   options: RequestInit,
-  timeoutMs = ISPRING_FETCH_TIMEOUT_MS
+  timeoutMs: number
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
+    const response = await fetch(url, { ...options, signal: controller.signal });
     if (!response.ok) {
-      const text = await response.text(); // тоже под таймаутом
+      const text = await response.text();
       throw new Error(`HTTP ${response.status}: ${text}`);
     }
-    return (await response.json()) as T; // тоже под таймаутом — вот что было сломано
+    return await response.json() as T;
   } finally {
-    clearTimeout(timer); // очищаем только когда всё прочитано
+    clearTimeout(timer);
   }
 }
 
-// Для запросов без JSON-тела (токен, points) — отдельная обёртка
 async function fetchTextWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs = ISPRING_FETCH_TIMEOUT_MS
+  timeoutMs = FAST_FETCH_TIMEOUT_MS
 ): Promise<{ ok: boolean; status: number; text: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
+    const response = await fetch(url, { ...options, signal: controller.signal });
     const text = await response.text();
     return { ok: response.ok, status: response.status, text };
   } finally {
@@ -109,7 +99,7 @@ export async function getISpringToken(): Promise<string> {
       Accept: 'application/json',
     },
     body: body.toString(),
-  });
+  }, FAST_FETCH_TIMEOUT_MS);
 
   console.log('✅ Successfully got iSpring token');
 
@@ -128,7 +118,7 @@ async function loadUsersFromSupabase(): Promise<ISpringUser[] | null> {
       .from('ispring_cache')
       .select('data, updated_at')
       .eq('key', 'users')
-      .maybeSingle(); // maybeSingle вместо single — single бросает 406 когда строк нет
+      .maybeSingle();
 
     if (error) {
       console.error('❌ Supabase cache read error:', error);
@@ -160,11 +150,7 @@ async function saveUsersToSupabase(users: ISpringUser[]): Promise<void> {
     const supabase = await createClient();
     const { error } = await supabase
       .from('ispring_cache')
-      .upsert({
-        key: 'users',
-        data: users,
-        updated_at: new Date().toISOString(),
-      });
+      .upsert({ key: 'users', data: users, updated_at: new Date().toISOString() });
 
     if (error) {
       console.error('❌ Error saving to Supabase cache:', error);
@@ -176,75 +162,75 @@ async function saveUsersToSupabase(users: ISpringUser[]): Promise<void> {
   }
 }
 
-async function fetchAllUsersFromISpring(): Promise<ISpringUser[]> {
-  const token = await getISpringToken();
-  const allUsers: ISpringUser[] = [];
-  let pageNumber = 1;
-  const pageSize = 1000;
-
-  console.log('📥 Fetching iSpring users...');
-
-  while (true) {
-    console.log(`Fetching page ${pageNumber}...`);
-
-    const data = await fetchJSONWithTimeout<ISpringUsersResponse>(
-      `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ page: pageNumber, pageSize }),
-      }
-    );
-
-    let users: ISpringUser[];
-    if (Array.isArray(data.userProfiles)) {
-      users = data.userProfiles;
-    } else if (data.userProfiles) {
-      users = [data.userProfiles];
-    } else {
-      users = [];
-    }
-
-    allUsers.push(...users);
-    console.log(`✅ Fetched ${users.length} users, total: ${allUsers.length}`);
-
-    if (users.length < pageSize) break;
-    pageNumber++;
-  }
-
-  return allUsers;
-}
-
-export async function getISpringUsers(): Promise<ISpringUser[]> {
+// Читает только из кэша. Никогда не идёт в iSpring.
+// Возвращает null если кэш холодный — caller должен это обработать.
+export async function getISpringUsers(): Promise<ISpringUser[] | null> {
   const now = Date.now();
 
-  // 1. Кэш в памяти Lambda (мгновенно)
   if (memUsersCache && memUsersCache.expiresAt > now) {
-    console.log(
-      `✅ Using in-memory users cache (${memUsersCache.users.length})`
-    );
+    console.log(`✅ Using in-memory users cache (${memUsersCache.users.length})`);
     return memUsersCache.users;
   }
 
-  // 2. Кэш в Supabase (~100ms, переживает cold start)
   const cachedUsers = await loadUsersFromSupabase();
   if (cachedUsers) {
     memUsersCache = { users: cachedUsers, expiresAt: now + USERS_CACHE_TTL_MS };
     return cachedUsers;
   }
 
-  // 3. Прямой запрос в iSpring (только при первом прогреве / раз в 10 минут)
-  console.log('🌐 Fetching fresh users from iSpring...');
-  const users = await fetchAllUsersFromISpring();
+  return null;
+}
 
-  memUsersCache = { users, expiresAt: now + USERS_CACHE_TTL_MS };
-  await saveUsersToSupabase(users);
+// Тяжёлый запрос в iSpring — вызывается из after() в фоне, не блокирует пользователя.
+// Таймаут 120 секунд — достаточно для медленного ответа iSpring.
+export async function warmUsersCache(): Promise<void> {
+  console.log('🔥 Warming users cache from iSpring...');
 
-  return users;
+  try {
+    const token = await getISpringToken();
+    const allUsers: ISpringUser[] = [];
+    let pageNumber = 1;
+    const pageSize = 1000;
+
+    while (true) {
+      console.log(`Fetching page ${pageNumber}...`);
+
+      const data = await fetchJSONWithTimeout<ISpringUsersResponse>(
+        `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ page: pageNumber, pageSize }),
+        },
+        WARM_FETCH_TIMEOUT_MS
+      );
+
+      let users: ISpringUser[];
+      if (Array.isArray(data.userProfiles)) {
+        users = data.userProfiles;
+      } else if (data.userProfiles) {
+        users = [data.userProfiles];
+      } else {
+        users = [];
+      }
+
+      allUsers.push(...users);
+      console.log(`✅ Fetched ${users.length} users, total: ${allUsers.length}`);
+
+      if (users.length < pageSize) break;
+      pageNumber++;
+    }
+
+    memUsersCache = { users: allUsers, expiresAt: Date.now() + USERS_CACHE_TTL_MS };
+    await saveUsersToSupabase(allUsers);
+    console.log('🔥 Cache warmed successfully');
+  } catch (err) {
+    console.error('❌ warmUsersCache failed:', err);
+  }
 }
 
 export async function getUserPoints(userId: string): Promise<number> {
@@ -269,10 +255,7 @@ export async function getUserPoints(userId: string): Promise<number> {
       return 0;
     }
 
-    console.log(
-      'Points XML response (first 200 chars):',
-      text.substring(0, 200)
-    );
+    console.log('Points XML response (first 200 chars):', text.substring(0, 200));
 
     const pointsMatch = text.match(/<points>(\d+)<\/points>/);
     const points = pointsMatch ? parseInt(pointsMatch[1], 10) : 0;

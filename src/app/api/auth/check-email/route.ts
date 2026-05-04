@@ -1,5 +1,8 @@
+// app/api/auth/check-email/route.ts
+
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { getISpringUsers } from '@/lib/ispring/api';
+import { getISpringUsers, warmUsersCache } from '@/lib/ispring/api';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,13 +14,28 @@ export async function POST(request: NextRequest) {
 
     console.log('Checking email:', email);
 
-    // Получаем список пользователей из iSpring
+    // Читаем только из кэша — никакого обращения в iSpring в этом запросе
     const users = await getISpringUsers();
-    console.log('Total users fetched:', users.length);
 
-    // Ищем пользователя по email (без учета регистра)
+    if (users === null) {
+      // Кэш холодный. Запускаем прогрев в фоне через after() —
+      // after() выполняется после отправки ответа, Lambda остаётся живой.
+      // Следующая попытка логина (через ~30-120 секунд) попадёт в тёплый кэш.
+      console.log('🔥 Cache cold — triggering background warm via after()');
+      after(warmUsersCache);
+
+      return NextResponse.json(
+        {
+          error:
+            'Система инициализируется. Пожалуйста, попробуйте войти через 30 секунд.',
+          retryable: true,
+        },
+        { status: 503 }
+      );
+    }
+
+    // Ищем пользователя по email (без учёта регистра)
     const user = users.find((u) => {
-      // ИСПРАВЛЕНИЕ: правильная обработка полей
       const fields = Array.isArray(u.fields) ? u.fields : [u.fields];
       const emailField = fields.find((f) => f?.name === 'EMAIL');
       const userEmail = emailField?.value;
@@ -32,7 +50,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ИСПРАВЛЕНИЕ: правильное извлечение данных
     const fields = Array.isArray(user.fields) ? user.fields : [user.fields];
     const firstName = fields.find((f) => f?.name === 'FIRST_NAME')?.value || '';
     const lastName = fields.find((f) => f?.name === 'LAST_NAME')?.value || '';
@@ -50,7 +67,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Check email error:', error);
-    // Логируем детальную ошибку
     if (error instanceof Error) {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
