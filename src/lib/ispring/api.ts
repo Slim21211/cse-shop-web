@@ -29,18 +29,48 @@ let tokenCache: { token: string; expiresAt: number } | null = null;
 let memUsersCache: { users: ISpringUser[]; expiresAt: number } | null = null;
 
 const USERS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 минут
-const ISPRING_FETCH_TIMEOUT_MS = 8000; // 8 секунд на каждый запрос
+const ISPRING_FETCH_TIMEOUT_MS = 8000; // 8 секунд
 
-// Обёртка над fetch с AbortController — больше не зависаем на 70 секунд
-async function fetchWithTimeout(
+// Важно: таймаут покрывает и fetch() (заголовки) и response.json() (тело).
+// Предыдущая версия очищала таймер после получения заголовков,
+// из-за чего тело читалось без ограничений — 71 секунда вместо 8.
+async function fetchJSONWithTimeout<T>(
   url: string,
   options: RequestInit,
   timeoutMs = ISPRING_FETCH_TIMEOUT_MS
-): Promise<Response> {
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text(); // тоже под таймаутом
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+    return (await response.json()) as T; // тоже под таймаутом — вот что было сломано
+  } finally {
+    clearTimeout(timer); // очищаем только когда всё прочитано
+  }
+}
+
+// Для запросов без JSON-тела (токен, points) — отдельная обёртка
+async function fetchTextWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = ISPRING_FETCH_TIMEOUT_MS
+): Promise<{ ok: boolean; status: number; text: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    return { ok: response.ok, status: response.status, text };
   } finally {
     clearTimeout(timer);
   }
@@ -72,7 +102,7 @@ export async function getISpringToken(): Promise<string> {
     client_secret: process.env.ISPRING_CLIENT_SECRET,
   });
 
-  const response = await fetchWithTimeout(url, {
+  const data = await fetchJSONWithTimeout<ISpringTokenResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -81,15 +111,6 @@ export async function getISpringToken(): Promise<string> {
     body: body.toString(),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ iSpring token error response:', errorText);
-    throw new Error(
-      `Failed to get iSpring token (${response.status}): ${errorText}`
-    );
-  }
-
-  const data: ISpringTokenResponse = await response.json();
   console.log('✅ Successfully got iSpring token');
 
   tokenCache = {
@@ -107,9 +128,14 @@ async function loadUsersFromSupabase(): Promise<ISpringUser[] | null> {
       .from('ispring_cache')
       .select('data, updated_at')
       .eq('key', 'users')
-      .single();
+      .maybeSingle(); // maybeSingle вместо single — single бросает 406 когда строк нет
 
-    if (error || !data) {
+    if (error) {
+      console.error('❌ Supabase cache read error:', error);
+      return null;
+    }
+
+    if (!data) {
       console.log('📭 No users cache in Supabase');
       return null;
     }
@@ -161,7 +187,7 @@ async function fetchAllUsersFromISpring(): Promise<ISpringUser[]> {
   while (true) {
     console.log(`Fetching page ${pageNumber}...`);
 
-    const response = await fetchWithTimeout(
+    const data = await fetchJSONWithTimeout<ISpringUsersResponse>(
       `https://${process.env.ISPRING_API_DOMAIN}/api/v2/user/list`,
       {
         method: 'POST',
@@ -173,16 +199,6 @@ async function fetchAllUsersFromISpring(): Promise<ISpringUser[]> {
         body: JSON.stringify({ page: pageNumber, pageSize }),
       }
     );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ iSpring users error:', errorText);
-      throw new Error(
-        `Failed to fetch iSpring users (${response.status}): ${errorText}`
-      );
-    }
-
-    const data: ISpringUsersResponse = await response.json();
 
     let users: ISpringUser[];
     if (Array.isArray(data.userProfiles)) {
@@ -206,7 +222,7 @@ async function fetchAllUsersFromISpring(): Promise<ISpringUser[]> {
 export async function getISpringUsers(): Promise<ISpringUser[]> {
   const now = Date.now();
 
-  // 1. Проверяем кэш в памяти Lambda (самый быстрый)
+  // 1. Кэш в памяти Lambda (мгновенно)
   if (memUsersCache && memUsersCache.expiresAt > now) {
     console.log(
       `✅ Using in-memory users cache (${memUsersCache.users.length})`
@@ -214,18 +230,17 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
     return memUsersCache.users;
   }
 
-  // 2. Проверяем кэш в Supabase (быстро ~100ms, переживёт cold start)
+  // 2. Кэш в Supabase (~100ms, переживает cold start)
   const cachedUsers = await loadUsersFromSupabase();
   if (cachedUsers) {
     memUsersCache = { users: cachedUsers, expiresAt: now + USERS_CACHE_TTL_MS };
     return cachedUsers;
   }
 
-  // 3. Идём в iSpring (медленно, только если оба кэша пустые/устаревшие)
+  // 3. Прямой запрос в iSpring (только при первом прогреве / раз в 10 минут)
   console.log('🌐 Fetching fresh users from iSpring...');
   const users = await fetchAllUsersFromISpring();
 
-  // Сохраняем в оба кэша
   memUsersCache = { users, expiresAt: now + USERS_CACHE_TTL_MS };
   await saveUsersToSupabase(users);
 
@@ -235,34 +250,31 @@ export async function getISpringUsers(): Promise<ISpringUser[]> {
 export async function getUserPoints(userId: string): Promise<number> {
   try {
     const token = await getISpringToken();
-
     console.log('💰 Getting points for user:', userId);
 
-    const response = await fetchWithTimeout(
+    const { ok, status, text } = await fetchTextWithTimeout(
       `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points?userIds=${userId}`,
       {
         headers: {
-          Authorization: token, // Без "Bearer"!
+          Authorization: token,
           Accept: 'application/xml',
         },
       }
     );
 
-    console.log('Points response status:', response.status);
+    console.log('Points response status:', status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Failed to get user points:', errorText);
+    if (!ok) {
+      console.error('❌ Failed to get user points:', text);
       return 0;
     }
 
-    const xml = await response.text();
     console.log(
       'Points XML response (first 200 chars):',
-      xml.substring(0, 200)
+      text.substring(0, 200)
     );
 
-    const pointsMatch = xml.match(/<points>(\d+)<\/points>/);
+    const pointsMatch = text.match(/<points>(\d+)<\/points>/);
     const points = pointsMatch ? parseInt(pointsMatch[1], 10) : 0;
 
     console.log('✅ User points:', points);
@@ -290,12 +302,12 @@ export async function withdrawPoints(
 
     console.log('💸 Withdrawing points:', { userId, amount, reason });
 
-    const response = await fetchWithTimeout(
+    const { ok, status, text } = await fetchTextWithTimeout(
       `https://api-${process.env.ISPRING_API_DOMAIN}/gamification/points/withdraw`,
       {
         method: 'POST',
         headers: {
-          Authorization: token, // Без "Bearer"!
+          Authorization: token,
           'Content-Type': 'application/xml',
           Accept: 'application/xml',
         },
@@ -303,11 +315,10 @@ export async function withdrawPoints(
       }
     );
 
-    console.log('Withdraw response status:', response.status);
+    console.log('Withdraw response status:', status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Failed to withdraw points:', errorText);
+    if (!ok) {
+      console.error('❌ Failed to withdraw points:', text);
       return false;
     }
 
