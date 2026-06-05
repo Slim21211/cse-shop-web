@@ -45,23 +45,10 @@ export async function GET() {
 
     const supabase = await createClient();
 
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('email')
-      .eq('id', session.userId)
-      .single();
-
-    if (userError || !userData) {
-      console.error('❌ User not found:', userError);
-      return NextResponse.json(
-        { error: 'Пользователь не найден' },
-        { status: 404 }
-      );
-    }
     const { data: orders, error } = await supabase
       .from('orders')
       .select('id, created_at, total_cost, items, user_name, email')
-      .eq('email', userData.email)
+      .eq('user_id', session.userId)
       .order('created_at', { ascending: false });
 
     if (error) {
