@@ -110,7 +110,7 @@ export function ProductCard({
           outOfStockOverlay={
             isOutOfStock ? (
               <div className={styles.outOfStock}>
-                <span>Появится в феврале</span>
+                <span>Разобрали</span>
               </div>
             ) : undefined
           }
