@@ -63,6 +63,14 @@ export async function POST(request: NextRequest) {
     } else if (existingUserResult.data) {
       // Пользователь найден
       authUserId = existingUserResult.data.id;
+      await supabase
+        .from('users')
+        .update({
+          email: email.toLowerCase(),
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+        })
+        .eq('id', authUserId);
     } else {
       console.error('Unexpected DB error:', existingUserResult.error);
       return NextResponse.json(
