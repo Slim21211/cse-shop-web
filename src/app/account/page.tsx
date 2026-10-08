@@ -194,12 +194,8 @@ export default function AccountPage() {
   };
 
   const handleAdminPanel = () => {
-    if (user?.email) {
-      const adminUrl = `https://cse-shop-admin.vercel.app/?email=${encodeURIComponent(
-        user.email
-      )}`;
-      window.open(adminUrl, '_blank');
-    }
+    // Открываем серверную ручку магазина — она выдаст пропуск и перекинет в админку.
+    window.open('/api/handoff', '_blank');
   };
 
   const formatDate = (dateString: string) => {
