@@ -95,12 +95,12 @@ export default function AccountPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<'admin' | 'manager' | 'none'>('none');
 
   useEffect(() => {
     fetchUserData();
     fetchOrders();
-    checkAdmin();
+    checkRole();
   }, []);
 
   const fetchUserData = async () => {
@@ -174,13 +174,13 @@ export default function AccountPage() {
     }
   };
 
-  const checkAdmin = async () => {
+  const checkRole = async () => {
     try {
-      const response = await fetch('/api/user/is-admin');
-      const data = await response.json();
-      setIsAdmin(data.isAdmin || false);
+      const res = await fetch('/api/user/role');
+      const data = await res.json();
+      setRole(data.role || 'none');
     } catch (error) {
-      console.error('Failed to check admin status:', error);
+      console.error('Failed to check role:', error);
     }
   };
 
@@ -278,10 +278,14 @@ export default function AccountPage() {
             </div>
 
             {/* Кнопка админ-панели (только для админов) */}
-            {isAdmin && (
+            {role === 'admin' && (
               <button onClick={handleAdminPanel} className={styles.adminButton}>
-                <Shield size={20} />
-                Панель администратора
+                <Shield size={20} /> Панель администратора
+              </button>
+            )}
+            {role === 'manager' && (
+              <button onClick={handleAdminPanel} className={styles.adminButton}>
+                <Shield size={20} /> Начислить баллы
               </button>
             )}
 
