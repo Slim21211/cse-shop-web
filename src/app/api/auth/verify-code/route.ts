@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
           email: email.toLowerCase(),
           first_name: userData.firstName,
           last_name: userData.lastName,
+          logged_out_at: null,
         })
         .eq('id', authUserId);
     } else {
