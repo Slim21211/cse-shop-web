@@ -20,7 +20,8 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-redux": "^9.2.0",
-    "sass": "^1.94.1"
+    "sass": "^1.94.1",
+    "typescript": "^5"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -29,7 +30,6 @@
     "@types/react-dom": "^19",
     "baseline-browser-mapping": "^2.9.5",
     "eslint": "^9",
-    "eslint-config-next": "16.0.3",
-    "typescript": "^5"
+    "eslint-config-next": "16.0.3"
   }
 }
