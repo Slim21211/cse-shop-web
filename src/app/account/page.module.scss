@@ -275,6 +275,22 @@
   font-size: var(--font-size-sm);
 }
 
+.orderCancelled {
+  opacity: 0.6;
+}
+
+.cancelledBadge {
+  display: inline-block;
+  margin-left: var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: #d32f2f;
+  border: 1px solid currentColor;
+  border-radius: var(--border-radius);
+  vertical-align: middle;
+}
+
 @media (max-width: 1024px) {
   .content {
     grid-template-columns: 1fr;

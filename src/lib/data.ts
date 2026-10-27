@@ -20,6 +20,7 @@ export type OrderRow = {
   created_at: string;
   total_cost: number;
   items: OrderItem[];
+  cancelled_at: string | null;
 };
 
 export type UserRole = 'admin' | 'manager' | 'none';
@@ -90,7 +91,7 @@ function normalizeOrderItems(items: unknown): OrderItem[] {
 export async function getOrders(userId: string): Promise<OrderRow[]> {
   const { data, error } = await createClient()
     .from('orders')
-    .select('id, created_at, total_cost, items')
+    .select('id, created_at, total_cost, items, cancelled_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 

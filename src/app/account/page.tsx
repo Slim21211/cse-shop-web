@@ -39,6 +39,7 @@ export default async function AccountPage() {
     getOrders(user.id),
     getUserRole(user.id, user.ispring_user_id),
   ]);
+  const activeOrdersCount = orders.filter((order) => !order.cancelled_at).length;
 
   return (
     <div className={styles.page}>
@@ -89,9 +90,9 @@ export default async function AccountPage() {
               <div className={styles.stat}>
                 <Package size={24} />
                 <div>
-                  <div className={styles.statValue}>{orders.length}</div>
+                  <div className={styles.statValue}>{activeOrdersCount}</div>
                   <div className={styles.statLabel}>
-                    {pluralizeOrders(orders.length)}
+                    {pluralizeOrders(activeOrdersCount)}
                   </div>
                 </div>
               </div>
@@ -128,10 +129,20 @@ export default async function AccountPage() {
             ) : (
               <div className={styles.orders}>
                 {orders.map((order) => (
-                  <div key={order.id} className={styles.order}>
+                  <div
+                    key={order.id}
+                    className={`${styles.order} ${order.cancelled_at ? styles.orderCancelled : ''}`}
+                  >
                     <div className={styles.orderHeader}>
                       <div>
-                        <div className={styles.orderId}>Заказ №{order.id}</div>
+                        <div className={styles.orderId}>
+                          Заказ №{order.id}
+                          {order.cancelled_at && (
+                            <span className={styles.cancelledBadge}>
+                              Отменён, баллы возвращены
+                            </span>
+                          )}
+                        </div>
                         <div className={styles.orderDate}>
                           {dateFormatter.format(new Date(order.created_at))}
                         </div>
