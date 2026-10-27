@@ -8,7 +8,6 @@
   display: flex;
   align-items: center;
   backdrop-filter: blur(10px);
-  background-color: rgba(var(--background-color), 0.95);
   transition: all 0.3s ease;
 }
 
@@ -161,7 +160,13 @@
   }
 }
 
-// УДАЛЕНО: .mobileNav, .mobileNavLink - они не используются
+// Заглушка на время загрузки данных пользователя
+.userSkeleton {
+  display: block;
+  width: 140px;
+  height: 40px;
+  border-radius: var(--border-radius-lg);
+}
 
 @media (max-width: 768px) {
   .container {
@@ -177,5 +182,15 @@
 
   .actions {
     justify-self: auto;
+  }
+
+  .nav,
+  .logoSubtext,
+  .userInfo {
+    display: none;
+  }
+
+  .userSkeleton {
+    width: 40px;
   }
 }

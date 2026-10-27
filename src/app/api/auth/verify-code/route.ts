@@ -1,99 +1,81 @@
 // api/auth/verify-code/route.ts
+// Код и данные пользователя проверяются только по подписанной куке из send-code.
+// Раньше код не проверялся вовсе, а userData приходил с клиента — можно было войти под кем угодно.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getUserPoints } from '@/lib/ispring/api';
 import { setSession } from '@/lib/sessions';
-
-// Примечание: В продакшене codes должна быть в Redis или БД!
-const codes = new Map<string, { code: string; expiresAt: number }>();
+import { verifyLoginChallenge } from '@/lib/loginCodes';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, code, userData } = await request.json();
+    const { code } = await request.json();
 
-    if (!email || !code || !userData) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return NextResponse.json({ error: 'Неверный код' }, { status: 400 });
     }
 
-    // --- 1. ПРОВЕРКА КОДА (Здесь должна быть логика проверки)
-    // Предполагаем, что проверка кода прошла успешно,
-    // иначе нужно вернуть ошибку 401.
+    const result = await verifyLoginChallenge(code);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 401 });
+    }
 
-    const supabase = await createClient();
+    const { user } = result;
+    const supabase = createClient();
 
-    // --- 2. ПОИСК ИЛИ СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ В ТАБЛИЦЕ 'users'
-
-    const existingUserResult = await supabase
+    const { data: existingUser, error: findError } = await supabase
       .from('users')
-      .select('id, first_name, last_name, ispring_user_id')
-      .eq('ispring_user_id', userData.userId)
+      .select('id')
+      .eq('ispring_user_id', user.ispringUserId)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    let authUserId: string;
-
-    if (
-      existingUserResult.error &&
-      existingUserResult.error.code === 'PGRST116'
-    ) {
-      // Пользователь не найден, создаем нового
-      const newUserResult = await supabase
-        .from('users')
-        .insert({
-          email: email.toLowerCase(),
-          ispring_user_id: userData.userId,
-          first_name: userData.firstName,
-          last_name: userData.lastName,
-        })
-        .select('id')
-        .single();
-
-      if (newUserResult.error) {
-        console.error('Database user creation error:', newUserResult.error);
-        return NextResponse.json(
-          { error: 'Ошибка создания пользователя' },
-          { status: 500 }
-        );
-      }
-      authUserId = newUserResult.data.id;
-    } else if (existingUserResult.data) {
-      // Пользователь найден
-      authUserId = existingUserResult.data.id;
-      await supabase
-        .from('users')
-        .update({
-          email: email.toLowerCase(),
-          first_name: userData.firstName,
-          last_name: userData.lastName,
-          logged_out_at: null,
-        })
-        .eq('id', authUserId);
-    } else {
-      console.error('Unexpected DB error:', existingUserResult.error);
+    if (findError) {
+      console.error('Unexpected DB error:', findError);
       return NextResponse.json(
         { error: 'Непредвиденная ошибка БД' },
         { status: 500 }
       );
     }
 
-    // --- 3. УСТАНОВКА НАШЕГО КУКИ СЕССИИ (КЛЮЧЕВОЙ ШАГ)
+    let authUserId: string;
+
+    if (existingUser) {
+      authUserId = existingUser.id;
+      await supabase
+        .from('users')
+        .update({
+          email: user.email,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          logged_out_at: null,
+        })
+        .eq('id', authUserId);
+    } else {
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          email: user.email,
+          ispring_user_id: user.ispringUserId,
+          first_name: user.firstName,
+          last_name: user.lastName,
+        })
+        .select('id')
+        .single();
+
+      if (createError || !newUser) {
+        console.error('Database user creation error:', createError);
+        return NextResponse.json(
+          { error: 'Ошибка создания пользователя' },
+          { status: 500 }
+        );
+      }
+      authUserId = newUser.id;
+    }
+
     await setSession(authUserId);
 
-    // --- 4. Получение баллов и ответ
-    const points = await getUserPoints(userData.userId);
-
-    return NextResponse.json({
-      success: true,
-      user: {
-        email: email.toLowerCase(),
-        name: `${userData.firstName} ${userData.lastName}`,
-        points,
-      },
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('❌ Verify code error:', error);
     return NextResponse.json({ error: 'Ошибка верификации' }, { status: 500 });

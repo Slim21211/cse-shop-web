@@ -10,6 +10,7 @@ interface ImageCarouselProps {
   alt: string;
   discountBadge?: React.ReactNode;
   outOfStockOverlay?: React.ReactNode;
+  priority?: boolean;
 }
 
 export function ImageCarousel({
@@ -17,6 +18,7 @@ export function ImageCarousel({
   alt,
   discountBadge,
   outOfStockOverlay,
+  priority,
 }: ImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -66,6 +68,7 @@ export function ImageCarousel({
           src={images[currentIndex]}
           alt={`${alt} - изображение ${currentIndex + 1}`}
           fill
+          priority={priority && currentIndex === 0}
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           className={styles.image}
         />

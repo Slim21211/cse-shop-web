@@ -1,64 +1,54 @@
 // app/api/auth/send-code/route.ts
+// Ищет пользователя в iSpring и отправляет код. Данные пользователя остаются на сервере
+// (в подписанной куке) — клиенту больше не отдаются iSpring userId и ФИО.
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import {
+  findISpringUserByEmail,
+  getISpringUserField,
+} from '@/lib/ispring/api';
+import { checkSendLimit, createLoginChallenge } from '@/lib/loginCodes';
+import { MAIL_FROM, transporter } from '@/lib/mail';
 
-// ВАЖНО: В production использовать Redis или базу данных
-// Текущее решение с Map работает только в одном процессе Node.js
-const codes = new Map<string, { code: string; expiresAt: number }>();
-
-const CODE_EXPIRY_MS = 5 * 60 * 1000; // 5 минут
-const CODE_LENGTH = 6;
-
-function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// Создаем транспортер один раз для переиспользования
-const transporter = nodemailer.createTransport({
-  host: 'smtp.cse.ru',
-  port: 587,
-  secure: false,
-  requireTLS: true,
-  connectionTimeout: 10000,
-  tls: {
-    rejectUnauthorized: false,
-    secureProtocol: 'TLSv1_2_method',
-  },
-  auth: {
-    user: 'giftshop@cse.ru',
-    pass: process.env.MAIL_PASSWORD,
-  },
-});
-
-// Экспортируем для использования в verify-code
-export { codes };
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
+    const { email: rawEmail } = await request.json();
 
-    if (!email || typeof email !== 'string') {
+    if (!rawEmail || typeof rawEmail !== 'string') {
       return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
     }
 
-    // Проверяем формат email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    const email = rawEmail.trim().toLowerCase();
+    if (email.length > 254 || !EMAIL_REGEX.test(email)) {
       return NextResponse.json(
         { error: 'Неверный формат email' },
         { status: 400 }
       );
     }
 
-    const code = generateCode();
-    const expiresAt = Date.now() + CODE_EXPIRY_MS;
+    const limitError = await checkSendLimit(email);
+    if (limitError) {
+      return NextResponse.json({ error: limitError }, { status: 429 });
+    }
 
-    // Сохраняем код (нормализуем email к lowercase)
-    codes.set(email.toLowerCase(), { code, expiresAt });
+    const ispringUser = await findISpringUserByEmail(email);
+    if (!ispringUser) {
+      return NextResponse.json(
+        { error: 'Пользователь не найден' },
+        { status: 404 }
+      );
+    }
 
-    // Отправляем письмо
+    const code = await createLoginChallenge({
+      ispringUserId: ispringUser.userId,
+      email,
+      firstName: getISpringUserField(ispringUser, 'FIRST_NAME'),
+      lastName: getISpringUserField(ispringUser, 'LAST_NAME'),
+    });
+
     await transporter.sendMail({
-      from: '"Магазин подарков КСЭ" <giftshop@cse.ru>',
+      from: MAIL_FROM,
       to: email,
       subject: 'Код подтверждения входа',
       html: `
@@ -73,8 +63,6 @@ export async function POST(request: NextRequest) {
         </div>
       `,
     });
-
-    console.log('✅ Code sent to:', email);
 
     return NextResponse.json({ success: true });
   } catch (error) {

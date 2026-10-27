@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Mail, Phone, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import styles from './footer.module.scss';
 
 export function Footer() {
@@ -21,7 +21,7 @@ export function Footer() {
               <Link href="/catalog/merch">Мерч компании</Link>
               <Link href="/catalog/gifts">Подарки отдела</Link>
               <Link href="/cart">Корзина</Link>
-              <Link href="/orders">Мои заказы</Link>
+              <Link href="/account">Мои заказы</Link>
             </nav>
           </div>
 

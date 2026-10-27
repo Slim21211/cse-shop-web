@@ -17,28 +17,3 @@ export type OrderItem = {
   quantity: number;
   product_id: number;
 };
-
-export type Order = {
-  id: number;
-  user_id: string;
-  user_name: string;
-  email: string;
-  telegram_login?: string;
-  items: OrderItem[];
-  total_cost: number;
-  created_at: string;
-};
-
-export type User = {
-  id: string;
-  email: string;
-  ispring_user_id: string;
-  first_name?: string;
-  last_name?: string;
-  points?: number;
-};
-
-export type CartItem = {
-  product: Product;
-  quantity: number;
-};

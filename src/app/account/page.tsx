@@ -1,230 +1,44 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { User, Mail, Award, Package, ArrowLeft, Shield } from 'lucide-react';
 import {
-  User,
-  Mail,
-  Award,
-  Package,
-  ArrowLeft,
-  LogOut,
-  Shield,
-  Loader2,
-} from 'lucide-react';
+  getCurrentUser,
+  getOrders,
+  getPoints,
+  getUserRole,
+} from '@/lib/data';
+import { pluralizeOrders, pluralizePoints } from '@/lib/format';
+import { LogoutButton } from './logoutButton';
 import styles from './page.module.scss';
 
-interface OrderItem {
-  product_id?: number;
-  name: string;
-  quantity: number;
-  price: number;
-}
+const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Europe/Moscow',
+});
 
-interface Order {
-  id: number;
-  created_at: string;
-  total_cost: number;
-  items: OrderItem[];
-  user_name?: string;
-  email?: string;
-}
-
-interface UserData {
-  first_name: string;
-  last_name: string;
-  email: string;
-  points: number;
-}
-
-// Тип для "сырых" данных заказа из API
-interface RawOrder {
-  id: number;
-  created_at: string;
-  total_cost: number;
-  items: unknown; // может быть чем угодно из БД
-  user_name?: string;
-  email?: string;
-}
-
-// Функция для склонения слова "заказ"
-function pluralizeOrders(count: number): string {
-  const cases = [2, 0, 1, 1, 1, 2];
-  const titles = ['заказ', 'заказа', 'заказов'];
-  return titles[
-    count % 100 > 4 && count % 100 < 20
-      ? 2
-      : cases[count % 10 < 5 ? count % 10 : 5]
-  ];
-}
-
-// Функция для склонения слова "балл"
-function pluralizePoints(count: number): string {
-  const cases = [2, 0, 1, 1, 1, 2];
-  const titles = ['балл', 'балла', 'баллов'];
-  return titles[
-    count % 100 > 4 && count % 100 < 20
-      ? 2
-      : cases[count % 10 < 5 ? count % 10 : 5]
-  ];
-}
-
-// Функция для проверки и нормализации items
-function normalizeOrderItems(items: unknown): OrderItem[] {
-  if (!Array.isArray(items)) {
-    return [];
-  }
-
-  return items.filter(
-    (item): item is OrderItem =>
-      typeof item === 'object' &&
-      item !== null &&
-      'name' in item &&
-      typeof item.name === 'string' &&
-      'quantity' in item &&
-      typeof item.quantity === 'number' &&
-      'price' in item &&
-      typeof item.price === 'number'
+async function PointsStat({ ispringUserId }: { ispringUserId: string }) {
+  const points = await getPoints(ispringUserId);
+  return (
+    <>
+      <div className={styles.statValue}>{points ?? '—'}</div>
+      <div className={styles.statLabel}>{pluralizePoints(points ?? 0)}</div>
+    </>
   );
 }
 
-export default function AccountPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<UserData | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [ordersLoading, setOrdersLoading] = useState(true);
-  const [role, setRole] = useState<'admin' | 'manager' | 'none'>('none');
+export default async function AccountPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login?redirect=/account');
 
-  useEffect(() => {
-    fetchUserData();
-    fetchOrders();
-    checkRole();
-  }, []);
-
-  const fetchUserData = async () => {
-    try {
-      const [userRes, pointsRes] = await Promise.all([
-        fetch('/api/user/info'),
-        fetch('/api/user/points'),
-      ]);
-
-      if (userRes.status === 401 || pointsRes.status === 401) {
-        router.push('/login?redirect=/account');
-        return;
-      }
-
-      const userData = await userRes.json();
-      const pointsData = await pointsRes.json();
-
-      setUser({
-        ...userData,
-        points: pointsData.points,
-      });
-    } catch (error) {
-      console.error('Failed to fetch user data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchOrders = async () => {
-    try {
-      const response = await fetch('/api/orders');
-
-      if (response.status === 401) {
-        router.push('/login?redirect=/account');
-        return;
-      }
-
-      if (!response.ok) {
-        console.error('Orders fetch failed:', response.status);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('📦 Orders data:', data); // Для отладки
-
-      // Проверяем структуру данных
-      if (data.orders && Array.isArray(data.orders)) {
-        // Нормализуем данные заказов
-        const normalizedOrders = data.orders.map(
-          (order: RawOrder): Order => ({
-            id: order.id,
-            created_at: order.created_at,
-            total_cost: order.total_cost,
-            items: normalizeOrderItems(order.items),
-            user_name: order.user_name,
-            email: order.email,
-          })
-        );
-
-        console.log('✅ Normalized orders:', normalizedOrders);
-        setOrders(normalizedOrders);
-      } else {
-        console.error('Invalid orders structure:', data);
-        setOrders([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-      setOrders([]);
-    } finally {
-      setOrdersLoading(false);
-    }
-  };
-
-  const checkRole = async () => {
-    try {
-      const res = await fetch('/api/user/role');
-      const data = await res.json();
-      setRole(data.role || 'none');
-    } catch (error) {
-      console.error('Failed to check role:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      window.location.href = '/'; // Используем window.location для полной очистки
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const handleAdminPanel = () => {
-    // Открываем серверную ручку магазина — она выдаст пропуск и перекинет в админку.
-    window.open('/api/handoff', '_blank');
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  };
-
-  if (loading) {
-    return (
-      <div className={styles.page}>
-        <div className="container">
-          <div className={styles.loadingContainer}>
-            <Loader2 className="animate-spin" size={48} />
-            <h1 className={styles.title}>Загрузка...</h1>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
+  const [orders, role] = await Promise.all([
+    getOrders(user.id),
+    getUserRole(user.id, user.ispring_user_id),
+  ]);
 
   return (
     <div className={styles.page}>
@@ -259,10 +73,16 @@ export default function AccountPage() {
               <div className={styles.stat}>
                 <Award size={24} />
                 <div>
-                  <div className={styles.statValue}>{user.points}</div>
-                  <div className={styles.statLabel}>
-                    {pluralizePoints(user.points)}
-                  </div>
+                  <Suspense
+                    fallback={
+                      <>
+                        <div className={styles.statValue}>…</div>
+                        <div className={styles.statLabel}>баллов</div>
+                      </>
+                    }
+                  >
+                    <PointsStat ispringUserId={user.ispring_user_id} />
+                  </Suspense>
                 </div>
               </div>
 
@@ -277,34 +97,27 @@ export default function AccountPage() {
               </div>
             </div>
 
-            {/* Кнопка админ-панели (только для админов) */}
-            {role === 'admin' && (
-              <button onClick={handleAdminPanel} className={styles.adminButton}>
-                <Shield size={20} /> Панель администратора
-              </button>
-            )}
-            {role === 'manager' && (
-              <button onClick={handleAdminPanel} className={styles.adminButton}>
-                <Shield size={20} /> Начислить баллы
-              </button>
+            {/* Серверная ручка магазина выдаст пропуск и перекинет в админку */}
+            {role !== 'none' && (
+              <a
+                href="/api/handoff"
+                target="_blank"
+                rel="noopener"
+                className={styles.adminButton}
+              >
+                <Shield size={20} />{' '}
+                {role === 'admin' ? 'Панель администратора' : 'Начислить баллы'}
+              </a>
             )}
 
-            <button onClick={handleLogout} className={styles.logoutButton}>
-              <LogOut size={20} />
-              Выйти
-            </button>
+            <LogoutButton className={styles.logoutButton} />
           </div>
 
           {/* История заказов */}
           <div className={styles.ordersSection}>
             <h2 className={styles.sectionTitle}>История заказов</h2>
 
-            {ordersLoading ? (
-              <div className={styles.loadingOrders}>
-                <Loader2 className="animate-spin" size={32} />
-                <p>Загрузка заказов...</p>
-              </div>
-            ) : orders.length === 0 ? (
+            {orders.length === 0 ? (
               <div className={styles.emptyOrders}>
                 <Package size={48} />
                 <p>У вас пока нет заказов</p>
@@ -320,7 +133,7 @@ export default function AccountPage() {
                       <div>
                         <div className={styles.orderId}>Заказ №{order.id}</div>
                         <div className={styles.orderDate}>
-                          {formatDate(order.created_at)}
+                          {dateFormatter.format(new Date(order.created_at))}
                         </div>
                       </div>
                       <div className={styles.orderTotal}>
@@ -328,7 +141,7 @@ export default function AccountPage() {
                       </div>
                     </div>
 
-                    {order.items && order.items.length > 0 ? (
+                    {order.items.length > 0 ? (
                       <div className={styles.orderItems}>
                         {order.items.map((item, index) => (
                           <div key={index} className={styles.orderItem}>

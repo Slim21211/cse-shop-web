@@ -8,8 +8,7 @@ export async function POST() {
   try {
     const session = await getSession();
     if (session) {
-      const supabase = await createClient();
-      await supabase
+      await createClient()
         .from('users')
         .update({ logged_out_at: new Date().toISOString() })
         .eq('id', session.userId);

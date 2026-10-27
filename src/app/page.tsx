@@ -4,7 +4,7 @@ import { ArrowRight, Gift, ShoppingBag } from 'lucide-react';
 import { getSession } from '@/lib/sessions';
 import styles from './page.module.scss';
 
-import banner from './banner.png';
+import banner from './banner.jpg';
 
 export default async function HomePage() {
   const session = await getSession();
@@ -17,11 +17,12 @@ export default async function HomePage() {
         {/* Background Image */}
         <div className={styles.heroBackground}>
           <Image
-            src={banner} // Замените на ваш путь
+            src={banner}
             alt="Hero Background"
             fill
             priority
-            quality={90}
+            placeholder="blur"
+            sizes="100vw"
             className={styles.heroImage}
           />
           {/* Градиентный оверлей для контраста */}

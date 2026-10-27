@@ -1,47 +1,28 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { getSession } from './lib/sessions';
+import { SESSION_COOKIE_NAME, verifySessionToken } from './lib/sessions';
+
+const protectedPaths = ['/cart', '/orders', '/account'];
 
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set({ name, value, ...options });
-            });
-          } catch {
-            console.error('Необработанная ошибка');
-          }
-        },
-      },
-    }
-  );
-
-  const session = await getSession();
-
-  const protectedPaths = ['/cart', '/orders', '/account'];
+  const { pathname } = request.nextUrl;
   const isProtectedPath = protectedPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
+    pathname.startsWith(path)
+  );
+  if (!isProtectedPath) return NextResponse.next();
+
+  const session = await verifySessionToken(
+    request.cookies.get(SESSION_COOKIE_NAME)?.value
   );
 
-  if (isProtectedPath && !session) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  if (!session) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/cart/:path*', '/orders/:path*', '/account/:path*'],
 };

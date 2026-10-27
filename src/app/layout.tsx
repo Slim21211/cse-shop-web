@@ -1,21 +1,17 @@
 // app/layout.tsx
 import { Inter } from 'next/font/google';
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import '@/styles/globals.css';
-import { createClient } from '@/lib/supabase/server';
-import { getUserPoints } from '@/lib/ispring/api';
-import { getSession } from '@/lib/sessions';
 import { Header } from '@/components/layout/header/header';
 import { Footer } from '@/components/layout/footer/footer';
-import { StoreProvider } from '@/components/providers/storeProvider';
+import { THEME_COOKIE_KEY, type Theme } from '@/components/layout/header/themeToggle';
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   display: 'swap',
+  variable: '--font-inter',
 });
-
-const THEME_COOKIE_KEY = 'cse-theme';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://cse-shop.ru'),
@@ -107,122 +103,43 @@ export const metadata: Metadata = {
   },
 };
 
-async function getUserData() {
-  try {
-    const session = await getSession();
-    if (!session) return null;
+export const viewport: Viewport = {
+  themeColor: '#000000',
+};
 
-    const supabase = await createClient();
-
-    const { data: userData, error } = await supabase
-      .from('users')
-      .select('first_name, last_name, ispring_user_id')
-      .eq('id', session.userId)
-      .single();
-
-    if (error || !userData) {
-      console.error('❌ Error fetching user from DB:', error);
-      return null;
-    }
-
-    const points = await getUserPoints(userData.ispring_user_id);
-
-    return {
-      name: `${userData.first_name} ${userData.last_name}`,
-      points,
-    };
-  } catch (error) {
-    console.error('❌ Error fetching user data:', error);
-    return null;
-  }
-}
-
-async function getCartItemsCount() {
-  try {
-    const session = await getSession();
-    if (!session) return 0;
-
-    const supabase = await createClient();
-
-    const { data } = await supabase
-      .from('cart_items')
-      .select('quantity', { count: 'exact' })
-      .eq('user_id', session.userId);
-
-    return data?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-  } catch (error) {
-    console.error('❌ Error fetching cart count:', error);
-    return 0;
-  }
-}
+// Тема ещё не выбрана — берём системную до первой отрисовки, чтобы не было вспышки
+const systemThemeScript = `try{if(matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.dataset.theme='dark'}catch(e){}`;
 
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [user, cartItemsCount] = await Promise.all([
-    getUserData(),
-    getCartItemsCount(),
-  ]);
-
+  // Layout не ждёт данных пользователя: они догружаются в шапке через Suspense,
+  // поэтому HTML страницы уходит в браузер сразу
   const cookieStore = await cookies();
-  const storedTheme = cookieStore.get(THEME_COOKIE_KEY)?.value as
-    | 'light'
-    | 'dark'
-    | undefined;
-
-  const ssrTheme =
-    storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : 'light';
+  const storedTheme = cookieStore.get(THEME_COOKIE_KEY)?.value;
+  const theme: Theme | undefined =
+    storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : undefined;
 
   return (
-    <html lang="ru" data-theme={ssrTheme} suppressHydrationWarning>
+    <html
+      lang="ru"
+      data-theme={theme ?? 'light'}
+      className={inter.variable}
+      suppressHydrationWarning
+    >
       <head>
-        {/* ✅ Цвет статус-бара и UI браузера */}
-        <meta
-          name="theme-color"
-          content="#000000"
-          media="(prefers-color-scheme: dark)"
-        />
-        <meta
-          name="theme-color"
-          content="#000000"
-          media="(prefers-color-scheme: light)"
-        />
-
-        {/* ✅ Дополнительные метатеги для форсирования обновления */}
-        <meta httpEquiv="cache-control" content="no-cache" />
-        <meta httpEquiv="expires" content="0" />
-        <meta httpEquiv="pragma" content="no-cache" />
-
-        {/* ✅ Явные Open Graph теги (дублирование для надежности) */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://cse-shop.ru" />
-        <meta property="og:title" content="КСЭ - Магазин подарков" />
-        <meta
-          property="og:description"
-          content="Обменивайте баллы на фирменный мерч и подарки компании КСЭ"
-        />
-        <meta property="og:image" content="https://cse-shop.ru/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="КСЭ Магазин подарков" />
-
-        {/* ✅ Telegram специфичные */}
-        <meta name="telegram:card" content="summary_large_image" />
-        <meta
-          name="telegram:image"
-          content="https://cse-shop.ru/og-image.png"
-        />
+        {!theme && (
+          <script dangerouslySetInnerHTML={{ __html: systemThemeScript }} />
+        )}
       </head>
       <body className={inter.className}>
-        <StoreProvider>
-          <Header user={user} cartItemsCount={cartItemsCount} />
-          <main style={{ minHeight: 'calc(100vh - var(--header-height))' }}>
-            {children}
-          </main>
-          <Footer />
-        </StoreProvider>
+        <Header initialTheme={theme ?? 'light'} />
+        <main style={{ minHeight: 'calc(100vh - var(--header-height))' }}>
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );

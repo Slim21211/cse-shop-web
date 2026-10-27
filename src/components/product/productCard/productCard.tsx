@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
+import { pluralizePoints } from '@/lib/format';
 import styles from './productCard.module.scss';
 import { ImageCarousel } from '@/components/imageCarousel/imageCarousel';
 
@@ -11,17 +11,8 @@ interface ProductCardProps {
   product: Product;
   onAddToCart?: (product: Product) => void;
   isInCart?: boolean;
-}
-
-// Функция для склонения слова "балл"
-function pluralizePoints(count: number): string {
-  const cases = [2, 0, 1, 1, 1, 2];
-  const titles = ['балл', 'балла', 'баллов'];
-  return titles[
-    count % 100 > 4 && count % 100 < 20
-      ? 2
-      : cases[count % 10 < 5 ? count % 10 : 5]
-  ];
+  isPending?: boolean;
+  priority?: boolean;
 }
 
 // Функция для получения массива изображений
@@ -39,12 +30,14 @@ export function ProductCard({
   product,
   onAddToCart,
   isInCart,
+  isPending,
+  priority,
 }: ProductCardProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const isOutOfStock = product.remains === 0;
+  const isOutOfStock = product.remains <= 0;
   const hasDiscount = !!product.old_price && product.old_price > product.price;
   const images = getProductImages(product);
 
@@ -87,14 +80,11 @@ export function ProductCard({
 
   return (
     <div className={styles.card}>
-      <Link
-        href=""
-        className={styles.carouselLink}
-        onClick={(e) => e.preventDefault()}
-      >
+      <div className={styles.carouselLink}>
         <ImageCarousel
           images={images}
           alt={product.name}
+          priority={priority}
           discountBadge={
             hasDiscount ? (
               <div className={styles.discountBadge}>
@@ -115,16 +105,10 @@ export function ProductCard({
             ) : undefined
           }
         />
-      </Link>
+      </div>
 
       <div className={styles.content}>
-        <Link
-          href=""
-          className={styles.name}
-          onClick={(e) => e.preventDefault()}
-        >
-          {product.name}
-        </Link>
+        <h3 className={styles.name}>{product.name}</h3>
 
         {/* ✨ Описание с тултипом для десктопа и мобильных */}
         {product.description && (
@@ -179,7 +163,7 @@ export function ProductCard({
               className={`${styles.cartButton} ${
                 isInCart ? styles.inCart : ''
               }`}
-              disabled={isInCart}
+              disabled={isInCart || isPending}
             >
               <ShoppingCart size={18} />
               {isInCart ? 'В корзине' : 'В корзину'}
