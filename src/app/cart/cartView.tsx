@@ -7,7 +7,10 @@ import Image from 'next/image';
 import { Trash2, ShoppingBag, ArrowLeft } from 'lucide-react';
 import type { CartRow } from '@/lib/data';
 import { pluralizePoints } from '@/lib/format';
+import { Modal, modalStyles } from '@/components/modal/modal';
 import styles from './page.module.scss';
+
+type Notice = { variant: 'success' | 'error'; title: string; text: string };
 
 // Функция для получения первого изображения товара
 function getProductImage(product: CartRow['products']): string {
@@ -30,6 +33,34 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  const closeNotice = () => {
+    const wasOrdered = notice?.variant === 'success';
+    setNotice(null);
+    if (wasOrdered) {
+      router.push('/account');
+      router.refresh();
+    }
+  };
+
+  const noticeModal = (
+    <Modal
+      open={notice !== null}
+      onClose={closeNotice}
+      variant={notice?.variant}
+      title={notice?.title ?? ''}
+      actions={
+        notice?.variant === 'success' ? (
+          <button className={modalStyles.primaryButton} onClick={closeNotice}>
+            Перейти к моим заказам
+          </button>
+        ) : undefined
+      }
+    >
+      <p>{notice?.text}</p>
+    </Modal>
+  );
 
   const removeItem = async (productId: number) => {
     setPendingId(productId);
@@ -55,7 +86,11 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
     if (newQuantity < 1) return;
 
     if (newQuantity > item.products.remains) {
-      alert('Недостаточно товара на складе');
+      setNotice({
+        variant: 'error',
+        title: 'Недостаточно товара',
+        text: `На складе осталось ${item.products.remains} шт.`,
+      });
       return;
     }
 
@@ -104,6 +139,7 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
             </Link>
           </div>
         </div>
+        {noticeModal}
       </div>
     );
   }
@@ -219,14 +255,25 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
                 disabled={pendingId !== null}
                 onOrdered={() => {
                   setItems([]);
-                  router.push('/account');
-                  router.refresh();
+                  setNotice({
+                    variant: 'success',
+                    title: 'Заказ оформлен!',
+                    text: 'Мы отправили письмо с составом заказа — проверьте почту и подтвердите заказ ответным письмом.',
+                  });
                 }}
+                onError={(text) =>
+                  setNotice({
+                    variant: 'error',
+                    title: 'Не удалось оформить заказ',
+                    text,
+                  })
+                }
               />
             </Suspense>
           </div>
         </div>
       </div>
+      {noticeModal}
     </div>
   );
 }
@@ -236,11 +283,13 @@ function OrderSection({
   total,
   disabled,
   onOrdered,
+  onError,
 }: {
   pointsPromise: Promise<number | null>;
   total: number;
   disabled: boolean;
   onOrdered: () => void;
+  onError: (message: string) => void;
 }) {
   const userPoints = use(pointsPromise);
   const [ordering, setOrdering] = useState(false);
@@ -255,17 +304,14 @@ function OrderSection({
       const data = await response.json();
 
       if (response.ok) {
-        alert(
-          'Заказ успешно оформлен! Проверьте вашу почту для подтверждения.'
-        );
         onOrdered();
       } else {
-        alert(data.error || 'Не удалось оформить заказ');
+        onError(data.error || 'Попробуйте ещё раз чуть позже.');
         setOrdering(false);
       }
     } catch (error) {
       console.error('Failed to create order:', error);
-      alert('Произошла ошибка при оформлении заказа');
+      onError('Проверьте подключение к интернету и попробуйте ещё раз.');
       setOrdering(false);
     }
   };

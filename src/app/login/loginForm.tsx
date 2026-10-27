@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { CodeInput } from './codeInput';
 import styles from './page.module.scss';
 
 export function LoginForm({ redirectTo }: { redirectTo: string }) {
@@ -11,6 +12,8 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const [loading, setLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState('');
+  // Меняется после неудачной попытки: ячейки пересоздаются, очищаются и получают фокус
+  const [attempt, setAttempt] = useState(0);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +41,8 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
     }
   };
 
-  const handleCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const verifyCode = async (codeValue: string) => {
+    if (loading || isRedirecting) return;
     setLoading(true);
     setError('');
 
@@ -47,12 +50,14 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       const res = await fetch('/api/auth/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: codeValue }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error || 'Неверный код');
+        setCode('');
+        setAttempt((n) => n + 1);
         setLoading(false);
         return;
       }
@@ -64,9 +69,16 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       window.location.href = redirectTo;
     } catch {
       setError('Произошла ошибка');
+      setCode('');
+      setAttempt((n) => n + 1);
       setLoading(false);
       setIsRedirecting(false);
     }
+  };
+
+  const handleCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.length === 6) verifyCode(code);
   };
 
   return (
@@ -119,22 +131,17 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
             </form>
           ) : (
             <form onSubmit={handleCodeSubmit} className={styles.form}>
-              <div className={styles.inputGroup}>
-                <Lock className={styles.inputIcon} size={20} />
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                  required
-                  maxLength={6}
-                  className={styles.input}
-                  autoFocus
-                  disabled={loading || isRedirecting}
-                />
-              </div>
+              <CodeInput
+                key={attempt}
+                value={code}
+                onChange={(value) => {
+                  setCode(value);
+                  if (error) setError('');
+                }}
+                onComplete={verifyCode}
+                disabled={loading || isRedirecting}
+                hasError={!!error}
+              />
 
               <button
                 type="button"
@@ -151,7 +158,9 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
 
               <button
                 type="submit"
-                disabled={loading || isRedirecting || code.length !== 6}
+                disabled={
+                  loading || isRedirecting || !/^\d{6}$/.test(code)
+                }
                 className={styles.button}
               >
                 {isRedirecting ? (
