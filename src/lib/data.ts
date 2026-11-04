@@ -6,6 +6,7 @@ import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getSession } from '@/lib/sessions';
 import { getUserPoints } from '@/lib/ispring/api';
+import { ONBOARDING_STEPS, type OnboardingStepKey } from '@/lib/onboarding';
 import type { OrderItem, Product } from '@/types';
 
 export type CartRow = {
@@ -131,4 +132,27 @@ export async function getUserRole(
     .limit(1);
 
   return allowed?.length ? 'manager' : 'none';
+}
+
+/**
+ * Ключи шагов онбординга, которые пользователь ещё не видел.
+ * При ошибке БД возвращает пустой список: лучше не показать онбординг, чем показать его снова.
+ */
+export async function getPendingOnboardingSteps(
+  userId: string
+): Promise<OnboardingStepKey[]> {
+  const { data, error } = await createClient()
+    .from('onboarding_views')
+    .select('step')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('❌ Onboarding fetch error:', error);
+    return [];
+  }
+
+  const viewed = new Set(data.map((row) => row.step as string));
+  return ONBOARDING_STEPS.map((step) => step.key).filter(
+    (key) => !viewed.has(key)
+  );
 }

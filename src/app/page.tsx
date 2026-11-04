@@ -1,10 +1,19 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Gift, ShoppingBag } from 'lucide-react';
 import { getSession } from '@/lib/sessions';
+import { getPendingOnboardingSteps } from '@/lib/data';
+import { Onboarding } from '@/components/onboarding/onboarding';
 import styles from './page.module.scss';
 
 import banner from './banner.jpg';
+
+// Онбординг только для авторизованных и только на главной; шаги проверяются при каждом заходе
+async function HomeOnboarding({ userId }: { userId: string }) {
+  const steps = await getPendingOnboardingSteps(userId);
+  return steps.length ? <Onboarding stepKeys={steps} /> : null;
+}
 
 export default async function HomePage() {
   const session = await getSession();
@@ -12,6 +21,11 @@ export default async function HomePage() {
 
   return (
     <div className={styles.page}>
+      {session && (
+        <Suspense fallback={null}>
+          <HomeOnboarding userId={session.userId} />
+        </Suspense>
+      )}
       {/* Hero Section */}
       <section className={styles.hero}>
         {/* Background Image */}
@@ -66,7 +80,11 @@ export default async function HomePage() {
         <div className="container">
           <h2 className={styles.sectionTitle}>Категории товаров</h2>
           <div className={styles.categoriesGrid}>
-            <Link href="/catalog/merch" className={styles.categoryCard}>
+            <Link
+              href="/catalog/merch"
+              className={styles.categoryCard}
+              data-onboarding="merch"
+            >
               <div className={styles.categoryIcon}>
                 <ShoppingBag size={48} />
               </div>
@@ -80,7 +98,11 @@ export default async function HomePage() {
               </span>
             </Link>
 
-            <Link href="/catalog/gifts" className={styles.categoryCard}>
+            <Link
+              href="/catalog/gifts"
+              className={styles.categoryCard}
+              data-onboarding="gifts"
+            >
               <div className={styles.categoryIcon}>
                 <Gift size={48} />
               </div>

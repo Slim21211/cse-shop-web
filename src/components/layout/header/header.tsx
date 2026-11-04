@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ShoppingCart, User } from 'lucide-react';
 import { getCartCount, getCurrentUser, getPoints } from '@/lib/data';
 import { pluralizePoints } from '@/lib/format';
+import { RulesButton } from '@/components/rules/rulesButton';
 import { ThemeToggle, type Theme } from './themeToggle';
 import styles from './header.module.scss';
 
@@ -43,7 +44,11 @@ async function HeaderUser() {
         )}
       </Link>
 
-      <Link href="/account" className={styles.userButton}>
+      <Link
+        href="/account"
+        className={styles.userButton}
+        data-onboarding="account"
+      >
         <User size={20} />
         <div className={styles.userInfo}>
           <span className={styles.userName}>
@@ -93,16 +98,32 @@ export function Header({ initialTheme }: { initialTheme: Theme }) {
 
         {/* Desktop Navigation (на мобильных скрыта через CSS) */}
         <nav className={styles.nav}>
-          <Link href="/catalog/merch" className={styles.navLink}>
+          <Link
+            href="/catalog/merch"
+            className={styles.navLink}
+            data-onboarding="merch"
+          >
             Мерч компании
           </Link>
-          <Link href="/catalog/gifts" className={styles.navLink}>
+          <Link
+            href="/catalog/gifts"
+            className={styles.navLink}
+            data-onboarding="gifts"
+          >
             Подарки отдела
           </Link>
+          <RulesButton
+            variant="link"
+            className={`${styles.navLink} ${styles.navButton}`}
+          />
         </nav>
 
         {/* Actions */}
         <div className={styles.actions}>
+          <RulesButton
+            variant="icon"
+            className={`${styles.iconButton} ${styles.mobileOnly}`}
+          />
           <ThemeToggle initialTheme={initialTheme} />
           <Suspense fallback={<HeaderUserSkeleton />}>
             <HeaderUser />

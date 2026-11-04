@@ -160,6 +160,21 @@
   }
 }
 
+// «Правила» — кнопка, оформленная как ссылка меню
+.navButton {
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+
+  &:hover:not(:disabled) {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+.mobileOnly {
+  display: none;
+}
+
 // Заглушка на время загрузки данных пользователя
 .userSkeleton {
   display: block;
@@ -188,6 +203,10 @@
   .logoSubtext,
   .userInfo {
     display: none;
+  }
+
+  .mobileOnly {
+    display: flex;
   }
 
   .userSkeleton {
