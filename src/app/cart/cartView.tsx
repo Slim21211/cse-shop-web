@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Trash2, ShoppingBag, ArrowLeft } from 'lucide-react';
 import type { CartRow } from '@/lib/data';
-import { pluralizePoints } from '@/lib/format';
+import { formatPoints, formatPointsWithUnit } from '@/lib/format';
 import { Modal, modalStyles } from '@/components/modal/modal';
 import styles from './page.module.scss';
 
@@ -177,8 +177,7 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
                   <div className={styles.itemInfo}>
                     <h3 className={styles.itemName}>{item.products.name}</h3>
                     <p className={styles.itemPrice}>
-                      {item.products.price}{' '}
-                      {pluralizePoints(item.products.price)} за шт.
+                      {formatPointsWithUnit(item.products.price)} за шт.
                     </p>
                     {item.products.remains <= 5 && (
                       <p className={styles.lowStock}>
@@ -209,7 +208,7 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
                     <div className={styles.itemTotal}>
                       <span className={styles.totalLabel}>Итого:</span>
                       <span className={styles.totalPrice}>
-                        {item.price} {pluralizePoints(item.price)}
+                        {formatPointsWithUnit(item.price)}
                       </span>
                     </div>
 
@@ -238,7 +237,7 @@ export default function CartView({ initialItems, pointsPromise }: CartViewProps)
             <div className={styles.summaryTotal}>
               <span>К оплате:</span>
               <span>
-                {total} {pluralizePoints(total)}
+                {formatPointsWithUnit(total)}
               </span>
             </div>
 
@@ -320,7 +319,7 @@ function OrderSection({
     <>
       <div className={styles.summaryRow}>
         <span>Ваши баллы:</span>
-        <span>{userPoints ?? '—'}</span>
+        <span>{userPoints === null ? '—' : formatPoints(userPoints)}</span>
       </div>
 
       {insufficient && (

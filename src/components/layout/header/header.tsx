@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { ShoppingCart, User } from 'lucide-react';
 import { getCartCount, getCurrentUser, getPoints } from '@/lib/data';
-import { pluralizePoints } from '@/lib/format';
+import { formatPointsWithUnit } from '@/lib/format';
 import { RulesButton } from '@/components/rules/rulesButton';
 import { ThemeToggle, type Theme } from './themeToggle';
 import styles from './header.module.scss';
@@ -11,7 +11,7 @@ async function UserPoints({ ispringUserId }: { ispringUserId: string }) {
   const points = await getPoints(ispringUserId);
   return (
     <span className={styles.userPoints}>
-      {points === null ? '— баллов' : `${points} ${pluralizePoints(points)}`}
+      {points === null ? '— баллов' : formatPointsWithUnit(points)}
     </span>
   );
 }

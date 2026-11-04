@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
-import { pluralizePoints } from '@/lib/format';
+import { formatPoints, pluralizePoints } from '@/lib/format';
 import styles from './productCard.module.scss';
 import { ImageCarousel } from '@/components/imageCarousel/imageCarousel';
 
@@ -148,9 +148,11 @@ export function ProductCard({
 
         <div className={styles.footer}>
           <div className={styles.priceInfo}>
-            <span className={styles.price}>{product.price}</span>
+            <span className={styles.price}>{formatPoints(product.price)}</span>
             {hasDiscount && (
-              <span className={styles.oldPrice}>{product.old_price}</span>
+              <span className={styles.oldPrice}>
+                {formatPoints(product.old_price!)}
+              </span>
             )}
             <span className={styles.currency}>
               {pluralizePoints(product.price)}

@@ -9,6 +9,16 @@ function pluralize(count: number, titles: [string, string, string]): string {
 export const pluralizePoints = (count: number) =>
   pluralize(count, ['балл', 'балла', 'баллов']);
 
+// Разделение разрядов: 14829 → «14 829» (неразрывный пробел — число не переносится).
+// Не через Intl: ICU сервера и браузера могут поставить разные пробелы, и карточки
+// товаров, которые рендерятся на обеих сторонах, разойдутся при гидратации
+export const formatPoints = (count: number) =>
+  String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+// «14 829 баллов», «1 балл», «2 балла»
+export const formatPointsWithUnit = (count: number) =>
+  `${formatPoints(count)} ${pluralizePoints(count)}`;
+
 export const pluralizeOrders = (count: number) =>
   pluralize(count, ['заказ', 'заказа', 'заказов']);
 

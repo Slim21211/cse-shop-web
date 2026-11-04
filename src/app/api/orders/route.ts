@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getSession } from '@/lib/sessions';
 import { getUserPoints, withdrawPoints } from '@/lib/ispring/api';
 import { MAIL_FROM, SHOP_EMAIL, escapeHtml, transporter } from '@/lib/mail';
-import { pluralizePoints } from '@/lib/format';
+import { formatPointsWithUnit } from '@/lib/format';
 
 // Запас по времени для iSpring и SMTP. Блокировка заказа живёт дольше (LOCK_TTL_MS),
 // поэтому даже убитая по таймауту функция не оставит пользователя заблокированным навсегда
@@ -162,7 +162,7 @@ export async function POST() {
     if (userPoints < totalCost) {
       return NextResponse.json(
         {
-          error: `Недостаточно баллов. Нужно ${totalCost}, у вас ${userPoints}`,
+          error: `Недостаточно баллов. Нужно ${formatPointsWithUnit(totalCost)}, у вас ${formatPointsWithUnit(userPoints)}`,
         },
         { status: 400 }
       );
@@ -229,10 +229,10 @@ export async function POST() {
       .map(
         (item, i) =>
           `${i + 1}. ${item.name} - ${item.quantity} шт.\n` +
-          `Стоимость: ${item.price} ${pluralizePoints(item.price)}`
+          `Стоимость: ${formatPointsWithUnit(item.price)}`
       )
       .join('\n\n');
-    const totalText = `💰 Общая стоимость: ${totalCost} ${pluralizePoints(totalCost)}`;
+    const totalText = `💰 Общая стоимость: ${formatPointsWithUnit(totalCost)}`;
 
     const orderText =
       `🛍 Новый заказ из веб-магазина!\n\n` +
@@ -261,7 +261,7 @@ export async function POST() {
             `<p style="margin: 10px 0;"><strong>${i + 1}. ${escapeHtml(
               item.name
             )}</strong> - ${item.quantity} шт.<br>` +
-            `Стоимость: ${item.price} ${pluralizePoints(item.price)}</p>`
+            `Стоимость: ${formatPointsWithUnit(item.price)}</p>`
         )
         .join('') +
       `</div>` +

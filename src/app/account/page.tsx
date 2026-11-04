@@ -8,7 +8,12 @@ import {
   getPoints,
   getUserRole,
 } from '@/lib/data';
-import { pluralizeOrders, pluralizePoints } from '@/lib/format';
+import {
+  formatPoints,
+  formatPointsWithUnit,
+  pluralizeOrders,
+  pluralizePoints,
+} from '@/lib/format';
 import { LogoutButton } from './logoutButton';
 import styles from './page.module.scss';
 
@@ -25,7 +30,9 @@ async function PointsStat({ ispringUserId }: { ispringUserId: string }) {
   const points = await getPoints(ispringUserId);
   return (
     <>
-      <div className={styles.statValue}>{points ?? '—'}</div>
+      <div className={styles.statValue}>
+        {points === null ? '—' : formatPoints(points)}
+      </div>
       <div className={styles.statLabel}>{pluralizePoints(points ?? 0)}</div>
     </>
   );
@@ -148,7 +155,7 @@ export default async function AccountPage() {
                         </div>
                       </div>
                       <div className={styles.orderTotal}>
-                        {order.total_cost} {pluralizePoints(order.total_cost)}
+                        {formatPointsWithUnit(order.total_cost)}
                       </div>
                     </div>
 
@@ -160,7 +167,7 @@ export default async function AccountPage() {
                               {item.name} × {item.quantity}
                             </span>
                             <span className={styles.itemPrice}>
-                              {item.price} {pluralizePoints(item.price)}
+                              {formatPointsWithUnit(item.price)}
                             </span>
                           </div>
                         ))}
