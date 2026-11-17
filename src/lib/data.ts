@@ -156,3 +156,17 @@ export async function getPendingOnboardingSteps(
     (key) => !viewed.has(key)
   );
 }
+
+export async function hasAcknowledgedManagerRules(userId: string): Promise<boolean> {
+  const { data, error } = await createClient()
+    .from('manager_rules_acknowledgements')
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('❌ Manager rules acknowledgement fetch error:', error);
+    return false;
+  }
+  return Boolean(data);
+}

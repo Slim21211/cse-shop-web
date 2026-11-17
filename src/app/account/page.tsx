@@ -7,6 +7,7 @@ import {
   getOrders,
   getPoints,
   getUserRole,
+  hasAcknowledgedManagerRules,
 } from '@/lib/data';
 import {
   formatPoints,
@@ -15,6 +16,7 @@ import {
   pluralizePoints,
 } from '@/lib/format';
 import { LogoutButton } from './logoutButton';
+import { ManagerAccrualButton } from './managerAccrualButton';
 import styles from './page.module.scss';
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -46,6 +48,8 @@ export default async function AccountPage() {
     getOrders(user.id),
     getUserRole(user.id, user.ispring_user_id),
   ]);
+  const rulesAcknowledged =
+    role === 'manager' ? await hasAcknowledgedManagerRules(user.id) : false;
   const activeOrdersCount = orders.filter((order) => !order.cancelled_at).length;
 
   return (
@@ -106,17 +110,21 @@ export default async function AccountPage() {
             </div>
 
             {/* Серверная ручка магазина выдаст пропуск и перекинет в админку */}
-            {role !== 'none' && (
+            {role === 'admin' ? (
               <a
                 href="/api/handoff"
                 target="_blank"
                 rel="noopener"
                 className={styles.adminButton}
               >
-                <Shield size={20} />{' '}
-                {role === 'admin' ? 'Панель администратора' : 'Начислить баллы'}
+                <Shield size={20} /> Панель администратора
               </a>
-            )}
+            ) : role === 'manager' ? (
+              <ManagerAccrualButton
+                acknowledged={rulesAcknowledged}
+                className={styles.adminButton}
+              />
+            ) : null}
 
             <LogoutButton className={styles.logoutButton} />
           </div>

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { getSession } from '@/lib/sessions';
+import { getCurrentUser, getUserRole, hasAcknowledgedManagerRules } from '@/lib/data';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +16,14 @@ export async function GET(req: NextRequest) {
   if (!session) {
     // нет — возвращаем в личный кабинет
     return NextResponse.redirect(new URL('/account', req.url));
+  }
+
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.redirect(new URL('/account', req.url));
+  const role = await getUserRole(user.id, user.ispring_user_id);
+  if (role === 'none') return NextResponse.redirect(new URL('/account', req.url));
+  if (role === 'manager' && !(await hasAcknowledgedManagerRules(user.id))) {
+    return NextResponse.redirect(new URL('/account?rules=required', req.url));
   }
 
   // 2. Делаем подписанный "пропуск" с userId внутри, срок жизни 90 секунд.
