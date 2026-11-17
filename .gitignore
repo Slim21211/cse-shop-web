@@ -21,6 +21,8 @@
 /build
 
 # misc
+/.agents/
+/AGENTS.md
 .DS_Store
 *.pem
 
